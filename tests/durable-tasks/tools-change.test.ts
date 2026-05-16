@@ -74,6 +74,10 @@ describe("registerTsqChangeTool", () => {
 						"defer",
 						"start",
 						"claim_assign_only",
+						"block",
+						"unblock",
+						"order",
+						"unorder",
 					],
 				},
 			},
@@ -163,6 +167,26 @@ describe("registerTsqChangeTool", () => {
 			{ action: "claim_assign_only", id: "tsq-1", assignee: "worker" },
 			["claim", "tsq-1", "--assignee=worker", "--format", "json"],
 		],
+		[
+			"block",
+			{ action: "block", child: "tsq-child", blocker: "tsq-blocker" },
+			["block", "tsq-child", "by", "tsq-blocker", "--format", "json"],
+		],
+		[
+			"unblock",
+			{ action: "unblock", child: "tsq-child", blocker: "tsq-blocker" },
+			["unblock", "tsq-child", "by", "tsq-blocker", "--format", "json"],
+		],
+		[
+			"order",
+			{ action: "order", later: "tsq-later", earlier: "tsq-earlier" },
+			["order", "tsq-later", "after", "tsq-earlier", "--format", "json"],
+		],
+		[
+			"unorder",
+			{ action: "unorder", later: "tsq-later", earlier: "tsq-earlier" },
+			["unorder", "tsq-later", "after", "tsq-earlier", "--format", "json"],
+		],
 	])("maps %s to exact tsq argv", async (_label, params, expectedArgs) => {
 		const { tool, captured } = registerTool();
 
@@ -189,6 +213,41 @@ describe("registerTsqChangeTool", () => {
 				options: { cwd: "/repo" },
 			},
 		]);
+	});
+
+	it.each([
+		[
+			"block",
+			{ action: "block", child: "tsq-child", blocker: "tsq-blocker" },
+			"Added block edge: tsq-child blocked by tsq-blocker",
+		],
+		[
+			"unblock",
+			{ action: "unblock", child: "tsq-child", blocker: "tsq-blocker" },
+			"Removed block edge: tsq-child no longer blocked by tsq-blocker",
+		],
+		[
+			"order",
+			{ action: "order", later: "tsq-later", earlier: "tsq-earlier" },
+			"Added order edge: tsq-later after tsq-earlier",
+		],
+		[
+			"unorder",
+			{ action: "unorder", later: "tsq-later", earlier: "tsq-earlier" },
+			"Removed order edge: tsq-later no longer ordered after tsq-earlier",
+		],
+	])("formats %s success text", async (_label, params, expectedText) => {
+		const { tool } = registerTool();
+
+		const result = await tool.execute(
+			"call-1",
+			params,
+			undefined,
+			undefined,
+			ctx(),
+		);
+
+		expect(firstText(result)).toBe(expectedText);
 	});
 
 	it.each([
@@ -269,6 +328,30 @@ describe("registerTsqChangeTool", () => {
 		[
 			"claim_assign_only missing assignee",
 			{ action: "claim_assign_only", id: "tsq-1" },
+		],
+		["block missing child", { action: "block", blocker: "tsq-blocker" }],
+		["block missing blocker", { action: "block", child: "tsq-child" }],
+		[
+			"block self-edge",
+			{ action: "block", child: "tsq-same", blocker: "tsq-same" },
+		],
+		["unblock missing child", { action: "unblock", blocker: "tsq-blocker" }],
+		["unblock missing blocker", { action: "unblock", child: "tsq-child" }],
+		[
+			"unblock self-edge",
+			{ action: "unblock", child: "tsq-same", blocker: "tsq-same" },
+		],
+		["order missing later", { action: "order", earlier: "tsq-earlier" }],
+		["order missing earlier", { action: "order", later: "tsq-later" }],
+		[
+			"order self-edge",
+			{ action: "order", later: "tsq-same", earlier: "tsq-same" },
+		],
+		["unorder missing later", { action: "unorder", earlier: "tsq-earlier" }],
+		["unorder missing earlier", { action: "unorder", later: "tsq-later" }],
+		[
+			"unorder self-edge",
+			{ action: "unorder", later: "tsq-same", earlier: "tsq-same" },
 		],
 		[
 			"raw passthrough is not accepted",

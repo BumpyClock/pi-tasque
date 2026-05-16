@@ -23,6 +23,10 @@ const TSQ_CHANGE_ACTIONS = [
 	"defer",
 	"start",
 	"claim_assign_only",
+	"block",
+	"unblock",
+	"order",
+	"unorder",
 ] as const;
 
 export type TsqChangeAction = (typeof TSQ_CHANGE_ACTIONS)[number];
@@ -36,7 +40,9 @@ export const TsqChangeParamsSchema = Type.Object(
 			Type.String({ description: "Task title (required for create)" }),
 		),
 		id: Type.Optional(
-			Type.String({ description: "Tasque task id (required except create)" }),
+			Type.String({
+				description: "Tasque task id for lifecycle/note/claim actions",
+			}),
 		),
 		kind: Type.Optional(
 			Type.String({ description: "Tasque task kind (required for create)" }),
@@ -64,6 +70,27 @@ export const TsqChangeParamsSchema = Type.Object(
 		note: Type.Optional(
 			Type.String({
 				description: "Note text for note, done, and defer actions",
+			}),
+		),
+		child: Type.Optional(
+			Type.String({
+				description: "Task id of the blocked task for block/unblock actions",
+			}),
+		),
+		blocker: Type.Optional(
+			Type.String({
+				description: "Task id blocking child for block/unblock actions",
+			}),
+		),
+		later: Type.Optional(
+			Type.String({
+				description: "Task id ordered after earlier for order/unorder actions",
+			}),
+		),
+		earlier: Type.Optional(
+			Type.String({
+				description:
+					"Task id that must happen before later for order/unorder actions",
 			}),
 		),
 	},
@@ -96,12 +123,14 @@ export function registerTsqChangeTool(pi: ExtensionAPI): void {
 			name: TSQ_CHANGE_TOOL_NAME,
 			label: "Tasque Change",
 			description:
-				"Run minimal durable Tasque mutations. Supports create, note, done, reopen, defer, start, and assignment-only claim. No raw tsq passthrough.",
+				"Run minimal durable Tasque mutations. Supports create, note, done, reopen, defer, start, assignment-only claim, and block/order edge changes. No raw tsq passthrough.",
 			promptSnippet:
-				"tsq_change: mutate durable Tasque tasks only through approved lifecycle/note actions.",
+				"tsq_change: mutate durable Tasque tasks only through approved lifecycle/note/edge actions.",
 			promptGuidelines: [
 				"Use tsq_change only for explicit durable Tasque mutations; do not use it as a raw tsq passthrough.",
 				"Use todo for current-session checklist steps; use tsq_change when durable Tasque state must change.",
+				"Use block/unblock for hard blockers and order/unorder for sequencing where one task should happen after another.",
+				"Use tsq_query with action deps or show to inspect durable graph state before or after edge changes.",
 			],
 			parameters: TsqChangeParamsSchema,
 			executionMode: "sequential",
@@ -182,6 +211,14 @@ function buildMutationCommand(
 			return buildIdOnlyArgv(params, action, "start");
 		case "claim_assign_only":
 			return buildClaimAssignOnlyArgv(params, action);
+		case "block":
+			return buildBlockArgv(params, action, "block");
+		case "unblock":
+			return buildBlockArgv(params, action, "unblock");
+		case "order":
+			return buildOrderArgv(params, action, "order");
+		case "unorder":
+			return buildOrderArgv(params, action, "unorder");
 	}
 }
 
@@ -306,6 +343,52 @@ function buildClaimAssignOnlyArgv(
 	};
 }
 
+function buildBlockArgv(
+	params: Readonly<Record<string, unknown>>,
+	action: TsqChangeAction,
+	command: "block" | "unblock",
+): ValidationResult {
+	const child = requireNonEmptyString(params, "child");
+	if (!child.ok) {
+		return child;
+	}
+	const blocker = requireNonEmptyString(params, "blocker");
+	if (!blocker.ok) {
+		return blocker;
+	}
+	if (child.value === blocker.value) {
+		return { ok: false, message: "child and blocker cannot be the same task" };
+	}
+	return {
+		ok: true,
+		action,
+		argv: [command, child.value, "by", blocker.value],
+	};
+}
+
+function buildOrderArgv(
+	params: Readonly<Record<string, unknown>>,
+	action: TsqChangeAction,
+	command: "order" | "unorder",
+): ValidationResult {
+	const later = requireNonEmptyString(params, "later");
+	if (!later.ok) {
+		return later;
+	}
+	const earlier = requireNonEmptyString(params, "earlier");
+	if (!earlier.ok) {
+		return earlier;
+	}
+	if (later.value === earlier.value) {
+		return { ok: false, message: "later and earlier cannot be the same task" };
+	}
+	return {
+		ok: true,
+		action,
+		argv: [command, later.value, "after", earlier.value],
+	};
+}
+
 function appendOptionalStringFlag(
 	argv: string[],
 	params: Readonly<Record<string, unknown>>,
@@ -424,6 +507,14 @@ function formatSuccess(
 			return `Started ${id ?? "task"}`;
 		case "claim_assign_only":
 			return `Assigned ${id ?? "task"} to ${params.assignee ?? "assignee"}`;
+		case "block":
+			return `Added block edge: ${params.child ?? "child"} blocked by ${params.blocker ?? "blocker"}`;
+		case "unblock":
+			return `Removed block edge: ${params.child ?? "child"} no longer blocked by ${params.blocker ?? "blocker"}`;
+		case "order":
+			return `Added order edge: ${params.later ?? "later"} after ${params.earlier ?? "earlier"}`;
+		case "unorder":
+			return `Removed order edge: ${params.later ?? "later"} no longer ordered after ${params.earlier ?? "earlier"}`;
 	}
 }
 

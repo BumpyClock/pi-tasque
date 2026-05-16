@@ -55,7 +55,8 @@ Use the smallest task layer that matches the work:
 
 - Use `todo` for tactical steps inside the current session: inspect, edit, verify, and handoff.
 - Use `tsq_query` for fresh read-only Tasque state.
-- Use `tsq_change` for explicit durable Tasque mutations.
+- Use `tsq_change` for explicit durable Tasque mutations, including lifecycle changes and block/order edges.
+- Use `block`/`unblock` for hard dependency edges and `order`/`unorder` for sequencing edges via `tsq_change`.
 - Use `tsq_claim` when taking ownership of a named durable Tasque task.
 - Pass an explicit `assignee` when the agent has a role/name, such as `developer`, `oracle`, or a worker name.
 - If no `assignee` is provided, `tsq_claim` defaults to `pi`.
@@ -79,7 +80,11 @@ There is no automatic lifecycle sync between session todos and Tasque:
 ## Example workflow
 
 ```json
-{ "action": "create", "subject": "Investigate failing release check", "owner": "developer" }
+{
+  "action": "create",
+  "subject": "Investigate failing release check",
+  "owner": "developer"
+}
 ```
 
 ```json
@@ -91,21 +96,25 @@ There is no automatic lifecycle sync between session todos and Tasque:
 ```
 
 ```json
-{ "action": "done", "id": "tsq-349aqgsj.12", "note": "Verified docs and package checks." }
+{
+  "action": "done",
+  "id": "tsq-349aqgsj.12",
+  "note": "Verified docs and package checks."
+}
 ```
 
 ## v1 tool and command reference
 
-| Surface | Purpose | Notes |
-| --- | --- | --- |
-| `todo` | Manage current-session tactical todos. | Session-local; branch-replayed from successful tool results. |
-| `/todos` | Show grouped current-session todos. | Interactive UI only. |
-| `tsq_query` | Read fresh Tasque state. | Read-only; does not mutate Tasque. |
-| `tsq_change` | Run explicit durable Tasque mutations. | Mutations are queued per cwd. |
-| `tsq_claim` | Claim a named durable Tasque task. | `id` required; `assignee` defaults `pi`; `start` defaults true. |
-| `task_bridge` | Link/promote/import between todos and Tasque. | Explicit bridge only; no automatic lifecycle sync. |
-| Todo overlay | Show active session todos above the editor. | Completed todos hide on next turn. |
-| Tasque status footer | Show cached durable-task status. | Display-only; agents should call `tsq_query` for fresh data. |
+| Surface              | Purpose                                       | Notes                                                           |
+| -------------------- | --------------------------------------------- | --------------------------------------------------------------- |
+| `todo`               | Manage current-session tactical todos.        | Session-local; branch-replayed from successful tool results.    |
+| `/todos`             | Show grouped current-session todos.           | Interactive UI only.                                            |
+| `tsq_query`          | Read fresh Tasque state.                      | Read-only; does not mutate Tasque.                              |
+| `tsq_change`         | Run explicit durable Tasque mutations.        | Mutations are queued per cwd.                                   |
+| `tsq_claim`          | Claim a named durable Tasque task.            | `id` required; `assignee` defaults `pi`; `start` defaults true. |
+| `task_bridge`        | Link/promote/import between todos and Tasque. | Explicit bridge only; no automatic lifecycle sync.              |
+| Todo overlay         | Show active session todos above the editor.   | Completed todos hide on next turn.                              |
+| Tasque status footer | Show cached durable-task status.              | Display-only; agents should call `tsq_query` for fresh data.    |
 
 ### `todo`
 
@@ -123,11 +132,20 @@ Actions:
 Examples:
 
 ```json
-{ "action": "create", "subject": "Run README verification", "owner": "developer" }
+{
+  "action": "create",
+  "subject": "Run README verification",
+  "owner": "developer"
+}
 ```
 
 ```json
-{ "action": "update", "id": 1, "status": "in_progress", "activeForm": "verifying docs" }
+{
+  "action": "update",
+  "id": 1,
+  "status": "in_progress",
+  "activeForm": "verifying docs"
+}
 ```
 
 ### `/todos`
@@ -185,15 +203,37 @@ Actions:
 - `defer`
 - `start`
 - `claim_assign_only`
+- `block`: make `child` blocked by `blocker`.
+- `unblock`: remove a block edge between `child` and `blocker`.
+- `order`: make `later` start after `earlier`.
+- `unorder`: remove an order edge between `later` and `earlier`.
+
+Use `block` for hard blockers and `order` for sequencing. Use `tsq_query` with `deps` or `show` to inspect durable graph state. Edge actions cannot create self-edges.
 
 Examples:
 
 ```json
-{ "action": "note", "id": "tsq-349aqgsj.12", "note": "README docs updated; running verification." }
+{
+  "action": "note",
+  "id": "tsq-349aqgsj.12",
+  "note": "README docs updated; running verification."
+}
 ```
 
 ```json
-{ "action": "done", "id": "tsq-349aqgsj.12", "note": "Docs and typecheck/test verification passed." }
+{
+  "action": "done",
+  "id": "tsq-349aqgsj.12",
+  "note": "Docs and typecheck/test verification passed."
+}
+```
+
+```json
+{ "action": "block", "child": "tsq-abc123.2", "blocker": "tsq-abc123.1" }
+```
+
+```json
+{ "action": "order", "later": "tsq-abc123.3", "earlier": "tsq-abc123.2" }
 ```
 
 ### `tsq_claim`
