@@ -15,8 +15,26 @@ import {
 import { errorToolDetails, textToolResult } from "../shared/tool-result.js";
 import { importTsqHandler } from "../bridge/import-tsq.js";
 import { promoteTodoHandler } from "../bridge/promote-todo.js";
+import {
+	collectHandoffStatus,
+	type HandoffCheckResult,
+} from "./handoff-guard.js";
 import { resolveProjectRoot } from "./project.js";
-import { executeTsqChange, type TsqChangeParams } from "./tools-change.js";
+import {
+	executeTsqChange,
+	executeTsqMarkPlanned,
+	type TsqChangeParams,
+} from "./tools-change.js";
+import { executeTsqSpec, type SpecMode } from "./tools-spec.js";
+import {
+	BULK_ITEM_ACTIONS,
+	validateBulkItems,
+	validateCreateTreeNode,
+	type BulkItem,
+	type CreateTreeNode,
+} from "./bulk-contract.js";
+import { executeBulk } from "./tools-bulk.js";
+import { executeCreateTree } from "./tools-tree-create.js";
 import { executeTsqClaim } from "./tools-claim.js";
 import { executeTsqQuery, type TsqQueryParams } from "./tools-query.js";
 
@@ -40,6 +58,11 @@ const TASK_ACTIONS = [
 	"unblock",
 	"order",
 	"unorder",
+	"spec",
+	"mark_planned",
+	"bulk",
+	"create_tree",
+	"handoff_check",
 	"link",
 	"list_links",
 	"promote",
@@ -48,7 +71,48 @@ const TASK_ACTIONS = [
 
 const FIND_TARGETS = ["ready", "open"] as const;
 const VIEW_MODES = ["list", "tree"] as const;
+const SPEC_MODES = ["show", "check", "set", "update"] as const;
 const BRIDGE_DESTINATIONS = ["todo"] as const;
+
+const BulkItemParamsSchema = Type.Object({
+	action: StringEnum(BULK_ITEM_ACTIONS, {
+		description:
+			"Bulk item action: start, finish, reopen, defer, note, or mark_planned.",
+	}),
+	task: Type.String({ description: "Durable task id for this bulk item." }),
+	because: Type.Optional(
+		Type.String({
+			description:
+				"Note/reason text. Required for note; optional for finish/defer.",
+		}),
+	),
+});
+
+const CreateTreeNodeParamsSchema = Type.Object({
+	title: Type.String({ description: "Durable task title for this node." }),
+	kind: Type.String({ description: "Durable task kind for this node." }),
+	priority: Type.Integer({
+		description: "Durable task priority for this node.",
+	}),
+	description: Type.Optional(
+		Type.String({ description: "Task description for this node." }),
+	),
+	planned: Type.Optional(
+		Type.Boolean({ description: "Mark this node planned." }),
+	),
+	needsPlan: Type.Optional(
+		Type.Boolean({ description: "Mark this node as needing planning." }),
+	),
+	children: Type.Optional(
+		Type.Array(
+			Type.Unknown({
+				description:
+					"Child create-tree nodes with the same shape: { title, kind, priority, description?, planned?, needsPlan?, children? }.",
+			}),
+			{ description: "Nested child task nodes." },
+		),
+	),
+});
 
 export type TaskAction = (typeof TASK_ACTIONS)[number];
 
@@ -135,11 +199,29 @@ export const TaskParamsSchema = Type.Object(
 				Type.Integer({ description: "Session todo id for link/promote." }),
 			]),
 		),
+		mode: Type.Optional(
+			StringEnum(SPEC_MODES, {
+				description: "Spec operation mode for spec action.",
+			}),
+		),
+		text: Type.Optional(
+			Type.String({
+				description: "Spec text content for spec set/update.",
+			}),
+		),
 		to: Type.Optional(
 			StringEnum(BRIDGE_DESTINATIONS, {
 				description: "Bridge destination for import.",
 			}),
 		),
+		items: Type.Optional(
+			Type.Array(BulkItemParamsSchema, {
+				description:
+					"Bulk lifecycle items. Each item has { action, task, because? }.",
+				minItems: 1,
+			}),
+		),
+		root: Type.Optional(CreateTreeNodeParamsSchema),
 	},
 	{ additionalProperties: false },
 );
@@ -157,7 +239,7 @@ export function registerTaskTool(pi: ExtensionAPI): void {
 			name: TASK_TOOL_NAME,
 			label: "Task",
 			description:
-				"Manage durable project tasks: find, show, create, claim, update lifecycle, dependencies, and todo links.",
+				"Manage durable project tasks: find, show, create, claim, specs, bulk changes, handoff checks, lifecycle, dependencies, and todo links.",
 			promptSnippet: TASK_PROMPT_SNIPPET,
 			promptGuidelines: TASK_PROMPT_GUIDELINES,
 			parameters: TaskParamsSchema,
@@ -201,7 +283,9 @@ export async function executeTaskTool(
 
 	const taskCtx = { ...ctx, cwd: projectRoot };
 	const result = await dispatchTaskAction(pi, params, signal, taskCtx);
-	return addProjectDetails(result, projectRoot);
+	return params.action === "handoff_check"
+		? result
+		: addProjectDetails(result, projectRoot);
 }
 
 async function dispatchTaskAction(
@@ -231,6 +315,21 @@ async function dispatchTaskAction(
 			return executeTsqChange(pi, toChangeParams(params), signal, ctx);
 		case "claim":
 			return executeTsqClaim(pi, toClaimParams(params), signal, ctx);
+		case "spec":
+			return executeTsqSpec(
+				pi,
+				{ id: params.task, mode: params.mode as SpecMode, text: params.text },
+				signal,
+				ctx,
+			);
+		case "mark_planned":
+			return executeTsqMarkPlanned(pi, params.task!, signal, ctx);
+		case "bulk":
+			return executeBulk(pi, params.items as BulkItem[], signal, ctx);
+		case "create_tree":
+			return executeCreateTree(pi, params.root as CreateTreeNode, signal, ctx);
+		case "handoff_check":
+			return executeHandoffCheck(pi, signal, ctx);
 		case "link":
 		case "list_links":
 		case "promote":
@@ -243,6 +342,91 @@ async function dispatchTaskAction(
 				DEFAULT_HANDLERS,
 			);
 	}
+}
+
+async function executeHandoffCheck(
+	pi: ExtensionAPI,
+	signal: AbortSignal | undefined,
+	ctx: ExtensionContext,
+): Promise<AgentToolResult<unknown>> {
+	const result = await collectHandoffStatus({
+		pi,
+		cwd: ctx.cwd,
+		...(signal != null ? { signal } : {}),
+	});
+
+	if (!result.ok) {
+		return textToolResult(
+			`Error: ${result.message}`,
+			errorToolDetails({ code: result.code, message: result.message }),
+		);
+	}
+
+	return textToolResult(formatHandoffText(result), {
+		ok: true,
+		ready: result.ready,
+		...formatHandoffDetails(result),
+	});
+}
+
+function formatHandoffText(result: HandoffCheckResult & { ok: true }): string {
+	const lines: string[] = [
+		result.ready
+			? "Handoff ready: all session todos complete and linked tasks resolved."
+			: "Handoff not ready.",
+	];
+
+	if ("todoBlockers" in result && result.todoBlockers?.length) {
+		lines.push("", "Todo blockers:");
+		for (const b of result.todoBlockers) {
+			lines.push(`- #${b.todoId} "${b.subject}" — ${b.reason}`);
+		}
+	}
+
+	if ("linkedBlockers" in result && result.linkedBlockers?.length) {
+		lines.push("", "Linked task blockers:");
+		for (const b of result.linkedBlockers) {
+			lines.push(`- ${b.tsqId} (todo #${b.todoId}) — ${b.status}`);
+		}
+	}
+
+	if ("linkedWarnings" in result && result.linkedWarnings?.length) {
+		lines.push("", "Warnings:");
+		for (const w of result.linkedWarnings) {
+			lines.push(`- ${w.tsqId} (todo #${w.todoId}) — ${w.status}`);
+		}
+	}
+
+	if ("readErrors" in result && result.readErrors?.length) {
+		lines.push("", "Read errors:");
+		for (const e of result.readErrors) {
+			lines.push(`- ${e.tsqId} — ${e.code}: ${e.message}`);
+		}
+	}
+
+	return lines.join("\n");
+}
+
+function formatHandoffDetails(
+	result: HandoffCheckResult & { ok: true },
+): Record<string, unknown> {
+	const details: Record<string, unknown> = {};
+	if (result.projectRoot !== undefined) {
+		details.projectRoot = result.projectRoot;
+	}
+	if ("todoBlockers" in result && result.todoBlockers?.length) {
+		details.todoBlockers = result.todoBlockers;
+	}
+	if ("linkedBlockers" in result && result.linkedBlockers?.length) {
+		details.linkedBlockers = result.linkedBlockers;
+	}
+	if ("linkedWarnings" in result && result.linkedWarnings?.length) {
+		details.linkedWarnings = result.linkedWarnings;
+	}
+	if ("readErrors" in result && result.readErrors?.length) {
+		details.readErrors = result.readErrors;
+	}
+	return details;
 }
 
 function toQueryParams(params: TaskParams): TsqQueryParams {
@@ -456,6 +640,41 @@ function validateTaskParams(
 		}
 		case "promote":
 			return requireTodoId(params.todo);
+		case "mark_planned":
+			return requireStringField(params.task, "task");
+		case "spec": {
+			const task = requireStringField(params.task, "task");
+			if (!task.ok) return task;
+			const mode = params.mode as string | undefined;
+			if (mode === undefined || mode.trim().length === 0)
+				return fieldRequired("mode");
+			const isRead = mode === "show" || mode === "check";
+			const isWrite = mode === "set" || mode === "update";
+			if (!isRead && !isWrite)
+				return {
+					ok: false,
+					message: "mode must be show, check, set, or update",
+				};
+			if (isRead && params.text !== undefined)
+				return {
+					ok: false,
+					message: `spec ${mode} does not accept text`,
+				};
+			if (isWrite) {
+				const text = params.text?.trim();
+				if (text === undefined || text.length === 0)
+					return {
+						ok: false,
+						message: `spec ${mode} requires text`,
+					};
+			}
+			return { ok: true };
+		}
+		case "bulk":
+			return validateBulkItems(params.items);
+		case "create_tree":
+			return validateCreateTreeNode(params.root);
+		case "handoff_check":
 		case "doctor":
 		case "list_links":
 			return { ok: true };
@@ -463,7 +682,9 @@ function validateTaskParams(
 }
 
 function actionUsesTasque(action: TaskAction): boolean {
-	return action !== "link" && action !== "list_links";
+	return (
+		action !== "link" && action !== "list_links" && action !== "handoff_check"
+	);
 }
 
 function hasWith(params: TaskParams, value: string): boolean {

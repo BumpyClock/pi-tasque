@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { registerTsqChangeTool } from "../../src/durable-tasks/tools-change.js";
+import {
+	registerTsqChangeTool,
+	executeTsqMarkPlanned,
+} from "../../src/durable-tasks/tools-change.js";
 import { createMockPi } from "../support/pi-harness.js";
 
 const ctx = (cwd = "/repo") => ({ cwd }) as ExtensionContext;
@@ -419,5 +422,141 @@ describe("registerTsqChangeTool", () => {
 			["start", "tsq-1"],
 			["done", "tsq-2"],
 		]);
+	});
+});
+
+describe("executeTsqMarkPlanned", () => {
+	function setupPi() {
+		const { pi, captured } = createMockPi();
+		captured.execHandler = () =>
+			okEnvelope({ task: { id: "tsq-5.2", planning_state: "planned" } });
+		return { pi, captured };
+	}
+
+	it("maps task id to exact argv: planned <id>", async () => {
+		const { pi, captured } = setupPi();
+
+		const result = await executeTsqMarkPlanned(pi, "tsq-5.2", undefined, ctx());
+
+		expect(result.details).toMatchObject({
+			ok: true,
+			data: {
+				argv: ["planned", "tsq-5.2"],
+				result: { task: { id: "tsq-5.2", planning_state: "planned" } },
+			},
+		});
+		expect(captured.execCalls).toEqual([
+			{
+				command: "tsq",
+				args: ["planned", "tsq-5.2", "--format", "json"],
+				options: { cwd: "/repo" },
+			},
+		]);
+	});
+
+	it("returns concise success text", async () => {
+		const { pi } = setupPi();
+
+		const result = await executeTsqMarkPlanned(pi, "tsq-5.2", undefined, ctx());
+
+		expect(firstText(result)).toBe("Marked tsq-5.2 as planned");
+	});
+
+	it("validates empty task id before running CLI", async () => {
+		const { pi, captured } = setupPi();
+
+		const result = await executeTsqMarkPlanned(pi, "", undefined, ctx());
+
+		expect(firstText(result)).toMatch(/^Error: /);
+		expect(result.details).toMatchObject({
+			ok: false,
+			error: { code: "validation_error" },
+		});
+		expect(captured.execCalls).toEqual([]);
+	});
+
+	it("validates whitespace-only task id before running CLI", async () => {
+		const { pi, captured } = setupPi();
+
+		const result = await executeTsqMarkPlanned(pi, "  ", undefined, ctx());
+
+		expect(firstText(result)).toMatch(/^Error: /);
+		expect(result.details).toMatchObject({
+			ok: false,
+			error: { code: "validation_error" },
+		});
+		expect(captured.execCalls).toEqual([]);
+	});
+
+	it("runs through mutation queue", async () => {
+		const { pi, captured } = setupPi();
+		const startedArgs: string[][] = [];
+		let releaseFirst: (() => void) | undefined;
+		const firstStarted = new Promise<void>((resolve) => {
+			captured.execHandler = async (_command, args) => {
+				startedArgs.push(args.slice(0, -2));
+				if (startedArgs.length === 1) {
+					resolve();
+					await new Promise<void>((release) => {
+						releaseFirst = release;
+					});
+				}
+				return okEnvelope({ task: { id: "tsq-1" } });
+			};
+		});
+
+		const first = executeTsqMarkPlanned(pi, "tsq-1", undefined, ctx());
+		await firstStarted;
+
+		const second = executeTsqMarkPlanned(pi, "tsq-2", undefined, ctx());
+		await Promise.resolve();
+
+		// Only first should have started
+		expect(startedArgs).toEqual([["planned", "tsq-1"]]);
+		releaseFirst?.();
+		await Promise.all([first, second]);
+
+		expect(startedArgs).toEqual([
+			["planned", "tsq-1"],
+			["planned", "tsq-2"],
+		]);
+	});
+
+	it("returns error details when tsq fails", async () => {
+		const { pi, captured } = createMockPi();
+		captured.execHandler = () => ({
+			stdout: JSON.stringify({
+				schema_version: 1,
+				command: "tsq planned",
+				ok: false,
+				error: { code: "not_found", message: "Task not found" },
+			}),
+			stderr: "",
+			code: 1,
+			killed: false,
+		});
+
+		const result = await executeTsqMarkPlanned(pi, "tsq-99", undefined, ctx());
+
+		expect(firstText(result)).toMatch(/^Error: /);
+		expect(result.details).toMatchObject({
+			ok: false,
+			error: {
+				details: {
+					argv: ["planned", "tsq-99"],
+				},
+			},
+		});
+	});
+
+	it("passes abort signal to runner", async () => {
+		const { pi, captured } = setupPi();
+		const controller = new AbortController();
+
+		await executeTsqMarkPlanned(pi, "tsq-1", controller.signal, ctx());
+
+		expect(captured.execCalls[0]?.options).toMatchObject({
+			signal: controller.signal,
+		});
 	});
 });

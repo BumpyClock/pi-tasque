@@ -183,6 +183,52 @@ export async function executeTsqChange(
 	}
 }
 
+// --- mark_planned helper (tsq-5.2) ---
+
+export interface TsqMarkPlannedSuccessData {
+	readonly argv: readonly string[];
+	readonly result: unknown;
+}
+
+export type TsqMarkPlannedDetails = ReturnType<
+	typeof okToolDetails<TsqMarkPlannedSuccessData>
+>;
+
+export async function executeTsqMarkPlanned(
+	pi: ExtensionAPI,
+	taskId: string,
+	signal: AbortSignal | undefined,
+	ctx: Pick<ExtensionContext, "cwd">,
+): Promise<AgentToolResult<TsqMarkPlannedDetails>> {
+	const trimmed = taskId.trim();
+	if (trimmed.length === 0) {
+		return validationErrorResult("task id is required");
+	}
+
+	const argv = ["planned", trimmed];
+
+	try {
+		const result = await runMutation(pi, ctx, argv, signal);
+		return textToolResult(
+			`Marked ${trimmed} as planned`,
+			okToolDetails({ argv, result }),
+		);
+	} catch (error) {
+		const message = getErrorMessage(error);
+		return textToolResult(
+			`Error: ${message}`,
+			errorToolDetails({
+				code: getErrorCode(error),
+				message,
+				details: {
+					argv,
+					error: serializeError(error),
+				},
+			}),
+		);
+	}
+}
+
 function runMutation(
 	pi: ExtensionAPI,
 	ctx: Pick<ExtensionContext, "cwd">,

@@ -145,16 +145,30 @@ Completed todos remain visible until the next turn, then hide from the overlay.
 
 ### `task`
 
-Manage durable project tasks. Every durable task operation runs from the current git project root.
+Manage durable project tasks. Most durable task operations run from the current git project root; `handoff_check` resolves the root only when linked todos exist.
 
 Read actions:
 
 - `doctor`: check task-system health.
-- `find`: find `ready` or `open` tasks. `lane` applies only to `ready`; use `view: "tree"` for an open-task tree.
-- `show`: show one task. Use `with: ["spec"]` to include spec content.
+- `find`: find `ready` or `open` tasks. `lane` applies only to `ready`; use `view: "tree"` for an open-task tree. With `view: "tree"`, `task` filters the tree to a parent task.
+- `show`: show one task. Use `with: ["spec"]` to include spec content in the display.
 - `deps`: show dependency tree for one task.
 - `notes`: show notes for one task.
 - `similar`: search for similar tasks by text.
+- `handoff_check`: check whether current-session todos and linked durable tasks are ready for final handoff. Not-ready returns `ok: true, ready: false`; internal failures return `ok: false`.
+- `spec`: operate on the spec attached to a task. `mode` is required and must be `show`, `check`, `set`, or `update`.
+  - `show` returns the attached spec content.
+  - `check` validates the attached spec against the task. Returns `ok: true` when validation passes; returns `ok: false` with `error.code: "spec_check_failed"` and diagnostics when validation fails.
+  - `set` attaches a new spec using the `text` field. Overwrites any existing spec.
+  - `update` updates the existing spec using the `text` field.
+  - `text` is required for `set` and `update`; rejected for `show` and `check`.
+  - `show` and `check` are read-only. `set` and `update` are mutations serialized through the per-project queue.
+
+**`show` with `with:["spec"]` vs `spec` action:** `show` with `with:["spec"]` includes spec content as extra context in the task display — useful for reading the spec alongside other task fields. The `spec` action with `mode:"show"` returns spec content alone; `spec` action with `mode:"check"` validates the attached spec and reports pass/fail with diagnostics. Use `show` for display context, `spec check` for validation.
+
+**Failed check semantics:** When `spec check` reports validation failures, the tool result has `details.ok: false`, `error.code: "spec_check_failed"`, and a `details.diagnostics` object with the issues. The CLI process exits successfully (no thrown error); the failure is reported in structured details so agents can inspect and react to individual check failures without catching exceptions.
+
+**Handoff check semantics:** `handoff_check` is read-only. It checks pending/in-progress/blocked todos plus linked durable task status. `closed` linked tasks are ready; `open`, `in_progress`, `blocked`, `deferred`, and unknown statuses block handoff; `canceled` is a warning. Missing/invalid linked tasks are reported as `readErrors` with `ready:false`.
 
 Mutation actions:
 
@@ -167,6 +181,15 @@ Mutation actions:
 - `claim`: assign ownership; `start` defaults to true, `requireSpec` enforces an attached spec, and `todo: true` creates one linked session todo.
 - `block` / `unblock`: manage hard blocker edges.
 - `order` / `unorder`: manage sequencing edges.
+
+Lifecycle mutation actions:
+
+- `mark_planned`: mark an existing task as planned. Requires `task` (non-empty id). Runs through the mutation queue.
+
+Batch actions:
+
+- `bulk`: run multiple lifecycle/note mutations sequentially with fail-fast semantics. Requires `items` — an array of `{ action, task, because? }` objects. Supported item actions: `start`, `finish`, `reopen`, `defer`, `note`, `mark_planned`. `because` is required for `note`, optional for `finish`/`defer`. On first failure, remaining items are skipped. No rollback of completed mutations. Result details contain `completed` (task ids), optional `failed` (task + error), and `skipped` (task ids).
+- `create_tree`: create a nested tree of durable tasks in one call. Requires `root` — a node object `{ title, kind, priority, description?, planned?, needsPlan?, children? }`. Children are recursive nodes. Creates parent before children, wiring generated parent ids. On first failure, remaining subtree is skipped — no orphan children are created. No rollback. Result details contain `created` (id + title), optional `failed` (title + error), and `skipped` (titles).
 
 Bridge actions:
 
@@ -187,6 +210,72 @@ Examples:
 
 ```json
 { "action": "show", "task": "task-123", "with": ["spec"] }
+```
+
+```json
+{ "action": "spec", "task": "task-123", "mode": "show" }
+```
+
+```json
+{ "action": "spec", "task": "task-123", "mode": "check" }
+```
+
+```json
+{
+  "action": "spec",
+  "task": "task-123",
+  "mode": "set",
+  "text": "# Spec\n\nAcceptance criteria..."
+}
+```
+
+```json
+{
+  "action": "spec",
+  "task": "task-123",
+  "mode": "update",
+  "text": "## Updated section\n\nRevised details..."
+}
+```
+
+```json
+{ "action": "mark_planned", "task": "task-456" }
+```
+
+```json
+{
+  "action": "bulk",
+  "items": [
+    { "action": "finish", "task": "task-1", "because": "Verified" },
+    { "action": "start", "task": "task-2" },
+    { "action": "mark_planned", "task": "task-3" }
+  ]
+}
+```
+
+```json
+{
+  "action": "create_tree",
+  "root": {
+    "title": "Add auth module",
+    "kind": "task",
+    "priority": 2,
+    "planned": true,
+    "children": [
+      {
+        "title": "Design auth API",
+        "kind": "task",
+        "priority": 2,
+        "needsPlan": true
+      },
+      { "title": "Implement token refresh", "kind": "task", "priority": 3 }
+    ]
+  }
+}
+```
+
+```json
+{ "action": "handoff_check" }
 ```
 
 ```json
