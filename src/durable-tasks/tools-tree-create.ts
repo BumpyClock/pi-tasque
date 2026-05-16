@@ -17,6 +17,7 @@ import type {
 import type { CreateTreeNode, CreateTreeResult } from "./bulk-contract.js";
 import { runQueuedMutation } from "./mutation-queue.js";
 import { runTsqJson } from "./runner.js";
+import { asRecord } from "../shared/error-utils.js";
 import {
 	okToolDetails,
 	textToolResult,
@@ -217,11 +218,4 @@ function formatResultText(result: CreateTreeResult): string {
 
 function getErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) {
-		return undefined;
-	}
-	return value as Record<string, unknown>;
 }

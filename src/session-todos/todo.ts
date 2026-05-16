@@ -2,6 +2,7 @@ import type {
 	ExtensionAPI,
 	ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { isRecord } from "../shared/error-utils.js";
 import {
 	TODO_PROMPT_GUIDELINES,
 	TODO_PROMPT_SNIPPET,
@@ -231,8 +232,4 @@ function isSuccessfulToolExecutionResult(event: {
 	if (!isRecord(details)) return true;
 	if (details.ok === false) return false;
 	return details.error === undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

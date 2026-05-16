@@ -2,6 +2,7 @@ import type {
 	ExtensionAPI,
 	ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { isRecord } from "../shared/error-utils.js";
 import {
 	createTasqueStatusCache,
 	formatTasqueStatusText,
@@ -195,8 +196,4 @@ function hasStatusUi(ctx: ExtensionContext): boolean {
 
 function getErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

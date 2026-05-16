@@ -12,6 +12,7 @@ import type {
 	ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import type { BulkItem, BulkItemAction, BulkResult } from "./bulk-contract.js";
+import { isRecord } from "../shared/error-utils.js";
 import type { StandardToolDetails } from "../shared/tool-result.js";
 import { okToolDetails, textToolResult } from "../shared/tool-result.js";
 import {
@@ -138,7 +139,3 @@ function formatBulkText(result: BulkResult, total: number): string {
 }
 
 // ── Utilities ──────────────────────────────────────────────────────
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}

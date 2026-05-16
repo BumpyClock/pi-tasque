@@ -16,6 +16,11 @@ import {
 import { commitState, getState } from "../session-todos/state/store.js";
 import type { Task } from "../session-todos/tool/types.js";
 import {
+	asRecord,
+	copyKnownErrorFields,
+	isRecord,
+} from "../shared/error-utils.js";
+import {
 	errorToolDetails,
 	okToolDetails,
 	textToolResult,
@@ -390,34 +395,4 @@ function serializeError(error: unknown): Record<string, unknown> {
 		};
 	}
 	return { value: String(error) };
-}
-
-function copyKnownErrorFields(error: Error): Record<string, unknown> {
-	const record = error as unknown as Record<string, unknown>;
-	const output: Record<string, unknown> = {};
-	for (const key of [
-		"code",
-		"command",
-		"details",
-		"stderr",
-		"stdout",
-		"killed",
-		"args",
-	] as const) {
-		if (record[key] !== undefined) {
-			output[key] = record[key];
-		}
-	}
-	return output;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) {
-		return undefined;
-	}
-	return value as Record<string, unknown>;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return asRecord(value) !== undefined;
 }

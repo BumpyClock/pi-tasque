@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { isRecord } from "../shared/error-utils.js";
 import { runTsqJson, type TsqRunContext } from "./runner.js";
 
 export interface TasqueStatusCacheState {
@@ -160,8 +161,4 @@ function truncateInline(text: string, maxLength: number): string {
 		return text;
 	}
 	return `${text.slice(0, Math.max(0, maxLength - 1))}…`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

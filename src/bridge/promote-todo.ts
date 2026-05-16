@@ -5,6 +5,7 @@ import { cloneTaskState } from "../session-todos/state/state.js";
 import { applyTaskMutation } from "../session-todos/state/state-reducer.js";
 import { commitState, getState } from "../session-todos/state/store.js";
 import type { Task } from "../session-todos/tool/types.js";
+import { isRecord } from "../shared/error-utils.js";
 import {
 	errorToolDetails,
 	okToolDetails,
@@ -324,8 +325,4 @@ function serializeError(error: unknown): unknown {
 		};
 	}
 	return error;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

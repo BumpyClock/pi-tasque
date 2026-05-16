@@ -3,6 +3,7 @@ import type {
 	ExecResult,
 	ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
+import { isRecord } from "../shared/error-utils.js";
 import {
 	TSQ_SCHEMA_VERSION,
 	type JsonValue,
@@ -227,8 +228,4 @@ function buildProcessErrorMessage(result: ExecResult): string {
 		return `tsq failed with exit code ${result.code}${killed}`;
 	}
 	return `tsq failed with exit code ${result.code}${killed}: ${summary}`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

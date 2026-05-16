@@ -9,6 +9,7 @@ import {
 	READ_TASKS_PROMPT_GUIDELINES,
 	READ_TASKS_PROMPT_SNIPPET,
 } from "../guidelines/internal-tools.js";
+import { isRecord } from "../shared/error-utils.js";
 import { truncatedTextToolResult } from "../shared/tool-result.js";
 import type { TruncatedText } from "../shared/truncation.js";
 import { runTsqJson } from "./runner.js";
@@ -521,8 +522,4 @@ function isTaskTreeNode(value: unknown): value is TsqTaskTreeNode {
 	return (
 		isRecord(value) && isTsqTask(value.task) && Array.isArray(value.children)
 	);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
