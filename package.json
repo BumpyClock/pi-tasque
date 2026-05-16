@@ -1,6 +1,6 @@
 {
   "name": "@bumpyclock/pi-tasque",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "Pi extension package for Tasque durable tasks plus in-session todos.",
   "type": "module",
   "license": "MIT",
