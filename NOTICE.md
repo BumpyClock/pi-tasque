@@ -1,6 +1,6 @@
 # Notices
 
-`pi-tasque` is distributed under the MIT License.
+`@bumpyclock/pi-tasque` is distributed under the MIT License.
 
 The session todo layer adapts behavior and structure from the MIT-licensed `@juicesharp/rpiv-todo` package.
 

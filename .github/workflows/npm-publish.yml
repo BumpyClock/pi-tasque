@@ -1,0 +1,54 @@
+name: npm-publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (skip actual publish)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm pack --dry-run
+
+      - name: Publish package
+        if: ${{ !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          VERSION=$(node -e "console.log(require('./package.json').version)")
+          PKG_NAME=$(node -e "console.log(require('./package.json').name)")
+          EXISTING=$(npm view "${PKG_NAME}@${VERSION}" version 2>/dev/null || echo "")
+          if [ -n "${EXISTING}" ]; then
+            echo "Skipping ${PKG_NAME}@${VERSION} (already published)"
+          else
+            echo "Publishing ${PKG_NAME}@${VERSION}"
+            npm publish --provenance --access public
+          fi
+
+      - name: Dry run summary
+        if: ${{ inputs.dry_run }}
+        run: |
+          echo "=== Dry Run ==="
+          node -e "const p=require('./package.json'); console.log(`Would publish ${p.name}@${p.version}`)"

@@ -16,7 +16,7 @@ The bridge between the layers is explicit. `pi-tasque` can link, promote, or imp
 Install with Pi:
 
 ```bash
-pi install npm:pi-tasque
+pi install npm:@bumpyclock/pi-tasque
 ```
 
 For local development, install the local package path once:

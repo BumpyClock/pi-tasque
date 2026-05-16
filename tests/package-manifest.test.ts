@@ -14,9 +14,17 @@ describe("package manifest", () => {
 	it("declares the publishable Pi package identity", async () => {
 		const manifest = await readManifest();
 
-		expect(manifest.name).toBe("pi-tasque");
+		expect(manifest.name).toBe("@bumpyclock/pi-tasque");
 		expect(manifest.type).toBe("module");
 		expect(manifest.license).toBe("MIT");
+		expect(manifest.repository).toEqual({
+			type: "git",
+			url: "git+https://github.com/BumpyClock/pi-tasque.git",
+		});
+		expect(manifest.publishConfig).toEqual({
+			access: "public",
+			provenance: true,
+		});
 		expect(manifest.keywords).toEqual(
 			expect.arrayContaining(["pi-package", "pi-extension"]),
 		);
