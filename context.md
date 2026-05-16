@@ -1,93 +1,39 @@
 # Code Context
 
 ## Files Retrieved
-1. `src/index.ts` (lines 1-10) – extension registration entrypoint; confirms what tools/handlers are actually wired.
-2. `src/durable-tasks/status.ts` (lines 1-168) – `registerTasqueStatusLifecycle`, `session_start`, `tool_execution_end`, `session_shutdown`, and status refresh trigger logic.
-3. `src/durable-tasks/cache.ts` (lines 45-118) – `refreshTasqueStatusCache` read-only tsq query sequence (`doctor`, `find ready`, `find in-progress`) and stale/error formatting.
-4. `src/durable-tasks/task-tool.ts` (lines 23-55, 173-205, 465-467, 516-523) – `task` tool schema/actions, `actionUsesTasque`, execute flow, root resolution, and dispatch.
-5. `src/durable-tasks/project.ts` (lines 36-53, 55-71) – `resolveProjectRoot` using `git rev-parse --show-toplevel`.
-6. `src/bridge/bridge-tool.ts` (lines 32-86) – bridge action dispatch (`link`, `list_links`, `promote_todo`, `import_tsq`) invoked via `task` action.
-7. `src/bridge/promote-todo.ts` (lines 35-163, 67-71) – explicit `promote` bridge flow; mutates Tasque via `tsq create` + `tsq note`.
-8. `src/bridge/import-tsq.ts` (lines 79-121, 128-155) – explicit `import` bridge flow; mutates no Tasque, reads Tasque tree/show and mutates session todo state.
-9. `src/durable-tasks/tools-change.ts` (lines 144-194, 19-20, 125-141) – durable mutation command mapping + `runQueuedMutation` wrapper + `runTsqJson` invocation.
-10. `src/durable-tasks/tools-claim.ts` (lines 121-139, 135-137, 221-247) – durable claim mutation + optional linked todo creation.
-11. `src/durable-tasks/tools-query.ts` (lines 125-151, 153-197) – read-only Tasque commands via `runTsqJson`.
-12. `src/durable-tasks/runner.ts` (lines 63-95, 160-205) – shared tsq executor and JSON envelope enforcement.
-13. `src/session-todos/todo.ts` (lines 161-217, 202-206) – session todo lifecycle and `session_start` replay/update behavior.
-14. `src/session-todos/state/replay.ts` (lines 233-269) – branch replay reconstructing todos from prior `todo` + `task` results, including bridge snapshots.
-15. `src/durable-tasks/mutation-queue.ts` (lines 3-21) – mutation serialization keyed by `cwd`.
-16. `tests/integration/pi-tasque.register.test.ts` (lines 22-33, 47-83) – asserted registered tool set is only `task` + `todo`.
-17. `tests/durable-tasks/task-tool.test.ts` (lines 57-74, 144-158, 161-183) – validates project-root resolution and that bridge-only actions validate before tsq.
-18. `tests/durable-tasks/status.test.ts` (lines 182-245, 310-392) – asserts startup status footer refresh and refresh-after-`task` behavior.
-19. `README.md` (lines 12, 42-47, 94-97, 148-176, 235-246) – docs mirror code: no automatic lifecycle sync; status refresh timing.
+1. `package.json` (lines 1-53) — package metadata, `publishConfig`, scripts, `packageManager` declaration, and no explicit publish script.
+2. `package-lock.json` (lines 1-22) — npm lockfile exists, lockfile v3, root package section mirrors `package.json` and has only `devDependencies`/`peerDependencies` metadata.
+3. `pnpm-lock.yaml` (lines 1-34) — pnpm lockfile also exists, importer root lists direct dependencies (`@earendil-works/*`, `typebox`) and dev deps.
+4. `.github/workflows/ci.yml` (lines 1-30) — CI trigger, permissions, node setup, and commands.
+5. `.github/workflows/npm-publish.yml` (lines 1-54) — publish trigger, permissions (`id-token`), publish guard, and publish command.
+6. `.github/workflows/release-from-package.yml` (lines 1-77) — manual release creation path and tag check.
+7. `.github/workflows/release-please.yml` (lines 1-42) — release-please automation path on push/dispatch.
+8. `README.md` (lines 14-21, 337-343) — install/usage and verification command.
+9. `tests/package-manifest.test.ts` (lines 1-50) — manifest assertions for `publishConfig`, scripts, repository, and peer deps.
+10. Repo search sweep: no `CHANGELOG*`, `RELEASING*`, `release-notes*`, or `*release*.md` files found.
 
 ## Key Code
-- `src/index.ts` only wires:
-  - `registerSessionTodoModule(pi)`
-  - `registerTaskTool(pi)`
-  - `registerTasqueStatusLifecycle(pi)`
-  So active user tools/commands are `todo` + `task` + `/todos` (`todo` command).
-
-- `src/durable-tasks/status.ts`
-  - `MUTATING_TOOL_NAMES = new Set(["task"])`.
-  - `pi.on("session_start")`:
-    - clears existing interval
-    - sets interval (default 60s)
-    - `await refresh(ctx)` immediately if UI exists.
-  - `refresh(ctx)`:
-    - resolves project root with `resolveProjectRoot(pi, ctx.cwd)`
-    - calls `refreshTasqueStatusCache`.
-  - `pi.on("tool_execution_end")`: refresh only if tool is `"task"`, no error, and details.ok is not false.
-  - `pi.on("session_shutdown")`: clear interval and clear status.
-
-- `src/durable-tasks/cache.ts`
-  - `refreshTasqueStatusCache(...)` performs only read commands:
-    - `doctor`
-    - `find ready --lane coding`
-    - `find ready --lane planning`
-    - `find in-progress --assignee pi`
-  - errors keep prior counts + add error message (stale/error text).
-
-- `src/durable-tasks/task-tool.ts`
-  - `actionUsesTasque(action)` is false only for `link`, `list_links`; true otherwise.
-  - `executeTaskTool` resolves project root unless those 2 bridge-only actions.
-  - dispatch routes to:
-    - `executeTsqQuery` (`doctor/find/show/deps/notes/similar`)
-    - `executeTsqChange` (`create/note/finish/.../unorder`)
-    - `executeTsqClaim` (`claim`)
-    - `executeTaskBridge` (`link/list_links/promote/import`).
-  - Adds `projectRoot` to tool result metadata.
-
-- `src/durable-tasks/project.ts`
-  - root resolution is hardcoded to `pi.exec("git", ["rev-parse", "--show-toplevel"], { cwd })`.
-
-- `src/bridge/bridge-tool.ts` + handlers (`src/bridge/promote-todo.ts`, `src/bridge/import-tsq.ts`)
-  - `promote` calls `tsq similar`, `tsq create`, then optional `tsq note` (mutating).
-  - `import` calls `tsq find open --tree`/`tsq show` (read), then mutates only session todos.
-  - `link` and `list_links` are local-state only.
-
-- `src/durable-tasks/tools-change.ts` / `tools-claim.ts` / `tools-query.ts`
-  - explicit wrappers to tsq via `runTsqJson`.
-  - changes/claim use `runQueuedMutation`.
-
-- `src/session-todos/state/replay.ts`
-  - `replayFromBranch` rebuilds todo state at `session_start` from prior `todo` and `task` tool results (including durable bridge snapshots/links/claim-created todos).
+- **Package manager intent (package.json):** `packageManager: "pnpm@11.1.2+sha..."` (line 52) but all CI/release workflows install with npm (`npm ci`) and use npm lock cache.
+- **Publish config (package.json):** `publishConfig.access = "public"` and `publishConfig.provenance = true` (lines 32-34).
+- **CI workflow (`ci.yml`):** on `push` to `main` + `pull_request`; job `check` runs `npm ci`, `npm run typecheck`, `npm test`, `npm pack --dry-run` with `cache: npm` (lines 3-30).
+- **Publish workflow (`npm-publish.yml`):** triggers on `release: [published]` and `workflow_dispatch`; permissions include `id-token: write`; checks out, `npm ci`, test/typecheck, pack, then `npm publish --provenance --access public` only if version not already in registry (`npm view`) and `inputs.dry_run` false (lines 3-54).
+- **Release-please workflow (`release-please.yml`):** triggers on `push main` + `workflow_dispatch`; runs same quality block, then `googleapis/release-please-action@v5` with `release-type: node` and package-name set (lines 3-42).
+- **Manual release-from-package (`release-from-package.yml`):** manual workflow only; quality checks then resolves version from `package.json`, checks tag non-existence, creates GitHub release with generated notes via `softprops/action-gh-release`.
+- **Docs/commands:** README has install instructions and only release-adjacent command in docs is local verification `npm run typecheck && npm test` (line 342).
 
 ## Architecture
-- Startup path: `piTasqueExtension` -> registers `todo` and `task` tools and status lifecycle.
-- On each session start in UI mode: status lifecycle resolves root for `session` cwd and schedules periodic `tsq` reads; todo overlay/state is reconstructed from branch replay.
-- Lifecycle: user actions on `task` run explicit `tsq` commands (query/change/claim/bridge) and on successful `task` completions status cache is refreshed.
-- Project root for all durable actions is resolved from git at execution time (except local-only actions).
-- No external tsq commands are executed outside:
-  - status lifecycle auto-refresh logic,
-  - explicit `task` tool handlers,
-  - internal mutation helpers called by `task` actions.
-- Other files define tsq sub-tools (`tsq_query`, `tsq_change`, `tsq_claim`, `task_bridge`) but they are not registered in extension entry; registration test confirms only `task` and `todo` tools are exposed.
+- **Source of truth conflict:** package manager is declared as pnpm in manifest, but automation is npm-first (`npm ci`, `cache: npm`, `npm pack`, `npm publish`).
+- **Release flow is split across workflows:**
+  - `release-please` can create a GitHub release automatically on merge to main.
+  - `npm-publish` is the only step that publishes to npm and runs on `release` events.
+  - `release-from-package` is a separate manual path that creates a GitHub release from package version but does not publish to npm.
+- **Current gating for publish:** runtime typecheck/test/pack gates plus idempotency check (`npm view pkg@version`) before publish.
 
 ## Start Here
-Open `src/index.ts` first (lines 1-10) to confirm extension wiring and which handlers/tools are real entry points, then `src/durable-tasks/status.ts` for startup lifecycle behavior.
+Open `.github/workflows/npm-publish.yml` first, then `package.json`, then `.github/workflows/release-please.yml` to validate whether publishing/release triggers match intended pipeline.
 
-## Supervisor coordination
-- Scope scan complete; no blocked tasks.
-- Decision: a fresh session does **not** create durable Tasque tasks on its own.
-- Startup side effect is status polling with read-only tsq commands (`doctor`/`find...`), not create/mutation.
+## Suspicious mismatches / audit flags
+- **Lockfile mismatch:** both `package-lock.json` and `pnpm-lock.yaml` are present.
+- **Dependency graph mismatch:** `pnpm-lock.yaml` root importer has direct `dependencies`, while `package.json` declares those as `peerDependencies`; indicates drift/out-of-sync lockfile state.
+- **Potential context bug:** `npm-publish.yml` references `${{ inputs.dry_run }}` on non-dispatch trigger (`release` events), which can fail/behave unexpectedly depending on Actions expression context.
+- **No explicit publish/release docs:** repo has no release notes/changelog/releasing guide file; only generic install + verification docs.

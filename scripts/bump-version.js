@@ -71,7 +71,9 @@ function computeNextVersion(current, input) {
 	if (SEMVER_RE.test(input)) {
 		const parsedNext = parseSemver(input);
 		if (compareSemver(parsedNext, parsedCurrent) < 0) {
-			throw new Error(`Explicit version ${input} is lower than current version ${current}.`);
+			throw new Error(
+				`Explicit version ${input} is lower than current version ${current}.`,
+			);
 		}
 		return input;
 	}
@@ -80,7 +82,9 @@ function computeNextVersion(current, input) {
 
 	if (input === "promote") {
 		if (!parsedCurrent.prerelease) {
-			throw new Error(`Current version ${current} has no prerelease to promote.`);
+			throw new Error(
+				`Current version ${current} has no prerelease to promote.`,
+			);
 		}
 		return `${major}.${minor}.${patch}`;
 	}
@@ -119,7 +123,9 @@ function updatePackageLock(next) {
 
 function main() {
 	if (modes.length > 1) {
-		throw new Error(`Expected at most one version argument, received: ${modes.join(", ")}`);
+		throw new Error(
+			`Expected at most one version argument, received: ${modes.join(", ")}`,
+		);
 	}
 
 	const pkg = readJson(PACKAGE_JSON);
@@ -137,7 +143,9 @@ function main() {
 	if (dryRun) {
 		console.log(`[dry-run] ${current} -> ${next}`);
 		console.log(`[dry-run] ${relative(PACKAGE_JSON)}: ${current} -> ${next}`);
-		console.log(`[dry-run] ${relative(PACKAGE_LOCK)}: ${lockPrevious} -> ${next}`);
+		console.log(
+			`[dry-run] ${relative(PACKAGE_LOCK)}: ${lockPrevious} -> ${next}`,
+		);
 		return;
 	}
 
