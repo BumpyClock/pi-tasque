@@ -61,6 +61,10 @@ describe("package manifest", () => {
 
 		expect(scripts.typecheck).toBe("tsc --noEmit");
 		expect(scripts.test).toBe("vitest run");
+		expect(scripts["bump:patch"]).toBe("node scripts/bump-version.js patch");
+		expect(scripts["bump:minor"]).toBe("node scripts/bump-version.js minor");
+		expect(scripts["bump:major"]).toBe("node scripts/bump-version.js major");
+		expect(scripts["bump:set"]).toBe("node scripts/bump-version.js");
 		expect(devDependencies).toEqual(
 			expect.objectContaining({
 				"@types/node": expect.any(String),

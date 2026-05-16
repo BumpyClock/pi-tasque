@@ -13,12 +13,15 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   publish:
     name: Publish
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
     steps:
       - uses: actions/checkout@v6
 
@@ -26,7 +29,7 @@ jobs:
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
-          cache: npm
+          package-manager-cache: false
 
       - run: npm ci
       - run: npm run typecheck
@@ -34,7 +37,7 @@ jobs:
       - run: npm pack --dry-run
 
       - name: Publish package
-        if: ${{ !inputs.dry_run }}
+        if: ${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false) }}
         run: |
           set -euo pipefail
           VERSION=$(node -e "console.log(require('./package.json').version)")
@@ -48,7 +51,7 @@ jobs:
           fi
 
       - name: Dry run summary
-        if: ${{ inputs.dry_run }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
         run: |
           echo "=== Dry Run ==="
-          node -e "const p=require('./package.json'); console.log(`Would publish ${p.name}@${p.version}`)"
+          node -e 'const p=require("./package.json"); console.log("Would publish "+p.name+"@"+p.version)'

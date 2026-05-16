@@ -1,6 +1,6 @@
 {
   "name": "@bumpyclock/pi-tasque",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Pi extension package for Tasque durable tasks plus in-session todos.",
   "type": "module",
   "license": "MIT",
@@ -21,7 +21,11 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "bump:patch": "node scripts/bump-version.js patch",
+    "bump:minor": "node scripts/bump-version.js minor",
+    "bump:major": "node scripts/bump-version.js major",
+    "bump:set": "node scripts/bump-version.js"
   },
   "files": [
     "src/",
@@ -49,5 +53,5 @@
     "typescript": "latest",
     "vitest": "latest"
   },
-  "packageManager": "pnpm@11.1.2+sha512.415a1cc25974731e75455c1468371be74c5aa5fb7621b50d4056d222451609f11412f23fd602e6169f1e060466641f798597e1be961a10688836a67b16569499"
+  "packageManager": "npm@11.12.0"
 }

@@ -39,4 +39,3 @@ jobs:
         id: release
         with:
           release-type: node
-          package-name: "@bumpyclock/pi-tasque"
