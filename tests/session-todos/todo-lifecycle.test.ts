@@ -16,7 +16,7 @@ import {
 import { createMockPi, emitPiEvent } from "../support/pi-harness.js";
 import { makeTheme } from "../support/theme.js";
 
-const WIDGET_KEY = "rpiv-todos";
+const WIDGET_KEY = "pi-tasque-todos";
 
 type MockUI = ExtensionUIContext & {
 	setWidget: ReturnType<typeof vi.fn>;
@@ -143,13 +143,12 @@ describe("session todo lifecycle", () => {
 		});
 	});
 
-	it("updates the overlay after successful todo, task_bridge, and tsq_claim results only", async () => {
+	it("updates the overlay after successful todo and task results only", async () => {
 		const { captured, ctx, tui } = await startWithVisibleTodo();
 
 		for (const [toolName, result] of [
 			["todo", { details: { error: "#99 not found" } }],
-			["task_bridge", { details: { ok: false } }],
-			["tsq_claim", { details: { ok: false } }],
+			["task", { details: { ok: false } }],
 		] as const) {
 			await emitPiEvent(
 				captured,
@@ -181,8 +180,7 @@ describe("session todo lifecycle", () => {
 
 		for (const [toolName, result] of [
 			["todo", { details: todoDetails([task({ id: 1, subject: "Seed" })]) }],
-			["task_bridge", { details: { ok: true } }],
-			["tsq_claim", { details: { ok: true } }],
+			["task", { details: { ok: true } }],
 		] as const) {
 			await emitPiEvent(
 				captured,
@@ -198,7 +196,7 @@ describe("session todo lifecycle", () => {
 			);
 		}
 
-		expect(tui.requestRender).toHaveBeenCalledTimes(3);
+		expect(tui.requestRender).toHaveBeenCalledTimes(2);
 	});
 
 	it("hides previous-turn completed todos on turn_start", async () => {

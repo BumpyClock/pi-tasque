@@ -23,61 +23,60 @@ export const TaskBridgeParamsSchema = Type.Object(
 	{
 		action: StringEnum(TASK_BRIDGE_ACTIONS, {
 			description:
-				"Explicit bridge operation between session todo state and durable Tasque tasks.",
+				"Explicit bridge operation between session todo state and durable tasks.",
 		}),
 		todoId: Type.Optional(
 			Type.Integer({
 				description:
-					"Session todo id. Required for link and promote_todo actions.",
+					"Session todo id. Required when linking or promoting a todo.",
 				minimum: 1,
 			}),
 		),
 		tsqId: Type.Optional(
 			Type.String({
 				description:
-					"Durable Tasque task id. Required for link and import_tsq actions.",
+					"Durable task id. Required when linking or importing a task.",
 			}),
 		),
 		assignee: Type.Optional(
 			Type.String({
 				description:
-					"Agent/owner name used by promote_todo/import_tsq bridge actions.",
+					"Agent/owner name used when creating or importing linked task todos.",
 			}),
 		),
 		owner: Type.Optional(
 			Type.String({
-				description: "Todo owner used by import_tsq bridge action.",
+				description: "Todo owner used when importing a durable task.",
 			}),
 		),
 		kind: Type.Optional(
 			Type.String({
-				description: "Tasque task kind used by promote_todo bridge action.",
+				description: "Durable task kind used when promoting a todo.",
 			}),
 		),
 		priority: Type.Optional(
 			Type.Integer({
-				description: "Tasque priority used by promote_todo bridge action.",
+				description: "Durable task priority used when promoting a todo.",
 			}),
 		),
 		description: Type.Optional(
 			Type.String({
-				description: "Description override used by promote_todo bridge action.",
+				description: "Description override used when promoting a todo.",
 			}),
 		),
 		parent: Type.Optional(
 			Type.String({
-				description:
-					"Parent Tasque task id used by promote_todo bridge action.",
+				description: "Parent durable task id used when promoting a todo.",
 			}),
 		),
 		planned: Type.Optional(
 			Type.Boolean({
-				description: "Planning flag used by promote_todo bridge action.",
+				description: "Planning flag used when promoting a todo.",
 			}),
 		),
 		needsPlan: Type.Optional(
 			Type.Boolean({
-				description: "Planning flag used by promote_todo bridge action.",
+				description: "Planning flag used when promoting a todo.",
 			}),
 		),
 	},

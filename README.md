@@ -1,15 +1,15 @@
 # pi-tasque
 
-Pi extension package for Tasque durable tasks plus branch-replayed in-session todos.
+Pi extension for durable project tasks plus in-session todos.
 
 ## What this package provides
 
 `pi-tasque` gives agents two task layers:
 
-- **Session todos**: current-session execution checklist for inspect/edit/verify/handoff steps.
-- **Durable Tasque tasks**: repo-local backlog, specs, dependencies, notes, and ownership through `tsq --format json`.
+- **Session todos**: current-session execution checklist for inspect, edit, verify, and handoff steps.
+- **Durable tasks**: repo-local backlog, specs, dependencies, notes, and ownership.
 
-The bridge between the layers is explicit. `pi-tasque` can link, promote, or import tasks, but it does **not** automatically sync lifecycle state between todos and Tasque.
+The bridge between the layers is explicit. `pi-tasque` can link, promote, or import tasks, but it does **not** automatically sync lifecycle state between todos and durable tasks.
 
 ## Install
 
@@ -33,51 +33,22 @@ edit TypeScript files -> /reload -> test behavior
 
 Pi loads the extension entrypoint from the installed package path, so TypeScript source edits do not require reinstalling the local package. Use `/reload` in the Pi session after changing files under `src/`.
 
-### Remove `@juicesharp/rpiv-todo`
-
-Remove or disable `@juicesharp/rpiv-todo` before enabling `pi-tasque`:
-
-```bash
-pi remove npm:@juicesharp/rpiv-todo
-```
-
-`pi-tasque` owns the same user-facing session todo surface:
-
-- `todo` tool
-- `/todos` command
-- above-editor todo overlay
-
-Running both packages together can register duplicate tools, commands, or widgets.
-
 ## Agent guidance
 
-Use the smallest task layer that matches the work:
-
-- Use `todo` for tactical steps inside the current session: inspect, edit, verify, and handoff.
-- Use `tsq_query` for fresh read-only Tasque state.
-- Use `tsq_change` for explicit durable Tasque mutations, including lifecycle changes and block/order edges.
-- Use `block`/`unblock` for hard dependency edges and `order`/`unorder` for sequencing edges via `tsq_change`.
-- Use `tsq_claim` when taking ownership of a named durable Tasque task.
-- Pass an explicit `assignee` when the agent has a role/name, such as `developer`, `oracle`, or a worker name.
-- If no `assignee` is provided, `tsq_claim` defaults to `pi`.
-- `tsq_claim` defaults `start` to true. Use `requireSpec` when the durable task must have an attached spec before work begins.
-- Use `tsq_claim` with `createTodo: true` when claiming durable work should also create one linked session todo.
-- Use `task_bridge promote_todo` when a session todo should become durable Tasque work.
-- Use `task_bridge import_tsq` when a durable Tasque task should become current-session todo work.
-- Do not create durable Tasque tasks for every session todo.
-- Do not mark a Tasque task done just because linked todos are completed; durable completion requires explicit verification and an explicit Tasque mutation.
+Use `todo` for current-session checklists; use `task` for durable project work, ownership, notes, specs, dependencies, and explicit todo links.
 
 ## Lifecycle boundaries
 
-There is no automatic lifecycle sync between session todos and Tasque:
+There is no automatic lifecycle sync between session todos and durable tasks:
 
-- Completing a `todo` does not mark a Tasque task done.
-- Marking a Tasque task done does not complete linked todos.
-- `task_bridge link` records a relationship only.
-- `task_bridge promote_todo` creates a Tasque task, links it, and completes the source todo as part of the explicit promotion flow.
-- `task_bridge import_tsq` creates or reuses session todos for Tasque tasks, but later status changes remain explicit.
+- Completing a `todo` does not mark a durable task done.
+- Marking a durable task done does not complete linked todos.
+- `task` link actions record relationships only.
+- `task` promote/import actions are explicit bridge operations.
 
 ## Example workflow
+
+Create a session todo:
 
 ```json
 {
@@ -87,43 +58,51 @@ There is no automatic lifecycle sync between session todos and Tasque:
 }
 ```
 
+Claim durable work and create one linked todo:
+
 ```json
-{ "id": "tsq-349aqgsj.12", "assignee": "developer", "createTodo": true }
+{
+  "action": "claim",
+  "task": "task-123",
+  "for": "developer",
+  "todo": true
+}
 ```
+
+List links:
 
 ```json
 { "action": "list_links" }
 ```
 
+Finish durable work after verification:
+
 ```json
 {
-  "action": "done",
-  "id": "tsq-349aqgsj.12",
-  "note": "Verified docs and package checks."
+  "action": "finish",
+  "task": "task-123",
+  "because": "Docs and package checks passed."
 }
 ```
 
-## v1 tool and command reference
+## Tool and command reference
 
-| Surface              | Purpose                                       | Notes                                                           |
-| -------------------- | --------------------------------------------- | --------------------------------------------------------------- |
-| `todo`               | Manage current-session tactical todos.        | Session-local; branch-replayed from successful tool results.    |
-| `/todos`             | Show grouped current-session todos.           | Interactive UI only.                                            |
-| `tsq_query`          | Read fresh Tasque state.                      | Read-only; does not mutate Tasque.                              |
-| `tsq_change`         | Run explicit durable Tasque mutations.        | Mutations are queued per cwd.                                   |
-| `tsq_claim`          | Claim a named durable Tasque task.            | `id` required; `assignee` defaults `pi`; `start` defaults true. |
-| `task_bridge`        | Link/promote/import between todos and Tasque. | Explicit bridge only; no automatic lifecycle sync.              |
-| Todo overlay         | Show active session todos above the editor.   | Completed todos hide on next turn.                              |
-| Tasque status footer | Show cached durable-task status.              | Display-only; agents should call `tsq_query` for fresh data.    |
+| Surface            | Purpose                                      | Notes                                                              |
+| ------------------ | -------------------------------------------- | ------------------------------------------------------------------ |
+| `todo`             | Manage current-session tactical todos.       | Session-local; replayed from successful `todo` and `task` results. |
+| `/todos`           | Show grouped current-session todos.          | Interactive UI only.                                               |
+| `task`             | Manage durable project tasks and todo links. | Resolves operations to the current git project root.               |
+| Todo overlay       | Show active session todos above the editor.  | Completed todos hide on the next turn.                             |
+| Task status footer | Show cached durable-task status.             | Display-only; agents should call `task` for fresh data.            |
 
 ### `todo`
 
-Manage current-session tactical todos. Todos are branch-replayed from previous successful `todo` results in the current session branch.
+Manage current-session todos. Todos are branch-replayed from previous successful `todo` results in the current session branch.
 
 Actions:
 
-- `create`: add a todo.
-- `update`: change status, text, owner, metadata, or dependencies.
+- `create`: add a todo, with optional description, owner, metadata, and blockers.
+- `update`: change status, text, owner, metadata, or dependencies with `blockedBy`, `addBlockedBy`, and `removeBlockedBy`.
 - `list`: list visible todos; deleted tombstones are hidden unless `includeDeleted` is true.
 - `get`: fetch one todo by id.
 - `delete`: tombstone one todo.
@@ -160,151 +139,111 @@ Example:
 
 ### Above-editor todo overlay
 
-Shows active session todos above the editor. The overlay rebuilds from branch replay on session lifecycle events and updates after successful `todo`, `task_bridge`, and `tsq_claim` executions that affect todo state.
+Shows active session todos above the editor. The overlay rebuilds on session start, compaction, and tree switches, then updates after successful `todo` and `task` executions that affect todo state.
 
 Completed todos remain visible until the next turn, then hide from the overlay.
 
-### `tsq_query`
+### `task`
 
-Run read-only Tasque queries through `tsq --format json`. Use this for fresh durable task state without mutating Tasque.
+Manage durable project tasks. Every durable task operation runs from the current git project root.
 
-Actions:
+Read actions:
 
-- `doctor`
-- `find_ready`
-- `find_open`
-- `show`
-- `show_with_spec`
-- `deps`
-- `notes`
-- `find_tree`
-- `similar`
+- `doctor`: check task-system health.
+- `find`: find `ready` or `open` tasks. `lane` applies only to `ready`; use `view: "tree"` for an open-task tree.
+- `show`: show one task. Use `with: ["spec"]` to include spec content.
+- `deps`: show dependency tree for one task.
+- `notes`: show notes for one task.
+- `similar`: search for similar tasks by text.
 
-Examples:
+Mutation actions:
 
-```json
-{ "action": "find_ready", "lane": "coding", "assignee": "developer" }
-```
+- `create`: create a durable task, with optional `description`, `under`, `planned`, or `needsPlan`.
+- `note`: add a note.
+- `finish`: mark done.
+- `reopen`: reopen a task.
+- `defer`: defer a task.
+- `start`: mark started.
+- `claim`: assign ownership; `start` defaults to true, `requireSpec` enforces an attached spec, and `todo: true` creates one linked session todo.
+- `block` / `unblock`: manage hard blocker edges.
+- `order` / `unorder`: manage sequencing edges.
 
-```json
-{ "action": "show_with_spec", "id": "tsq-349aqgsj.12" }
-```
+Bridge actions:
 
-### `tsq_change`
-
-Run approved durable Tasque mutations. Mutations are queued per working directory so concurrent agents do not race `tsq` writes.
-
-Actions:
-
-- `create`
-- `note`
-- `done`
-- `reopen`
-- `defer`
-- `start`
-- `claim_assign_only`
-- `block`: make `child` blocked by `blocker`.
-- `unblock`: remove a block edge between `child` and `blocker`.
-- `order`: make `later` start after `earlier`.
-- `unorder`: remove an order edge between `later` and `earlier`.
-
-Use `block` for hard blockers and `order` for sequencing. Use `tsq_query` with `deps` or `show` to inspect durable graph state. Edge actions cannot create self-edges.
+- `link`: associate an existing todo with an existing durable task via todo metadata.
+- `list_links`: inspect current todo ↔ durable task associations.
+- `promote`: create a durable task from an existing todo, add a promotion note, link metadata, and complete the source todo.
+- `import`: import a durable task, or an open-tree task plus children when available, into session todos with metadata links. `to` currently accepts only `"todo"`.
 
 Examples:
 
 ```json
-{
-  "action": "note",
-  "id": "tsq-349aqgsj.12",
-  "note": "README docs updated; running verification."
-}
+{ "action": "find", "tasks": "ready", "lane": "coding", "for": "developer" }
+```
+
+```json
+{ "action": "find", "view": "tree", "task": "task-parent" }
+```
+
+```json
+{ "action": "show", "task": "task-123", "with": ["spec"] }
 ```
 
 ```json
 {
-  "action": "done",
-  "id": "tsq-349aqgsj.12",
-  "note": "Docs and typecheck/test verification passed."
-}
-```
-
-```json
-{ "action": "block", "child": "tsq-abc123.2", "blocker": "tsq-abc123.1" }
-```
-
-```json
-{ "action": "order", "later": "tsq-abc123.3", "earlier": "tsq-abc123.2" }
-```
-
-### `tsq_claim`
-
-Claim a named durable Tasque task. This never auto-selects work; callers must provide the task id. `start` defaults to true, `assignee` defaults to `pi`, and `createTodo` optionally creates one linked session todo for the claimed task.
-
-Example:
-
-```json
-{
-  "id": "tsq-349aqgsj.12",
-  "assignee": "developer",
-  "requireSpec": true,
-  "createTodo": true
-}
-```
-
-### `task_bridge`
-
-Explicitly connect session todos and durable Tasque tasks. Bridge actions do not create implicit lifecycle sync.
-
-Actions:
-
-- `link`: associate an existing todo with an existing Tasque task via todo metadata.
-- `list_links`: inspect current session todo ↔ Tasque associations.
-- `promote_todo`: create a Tasque task from an existing todo, add a promotion note, link metadata, and complete the source todo.
-- `import_tsq`: import a Tasque task, or an open-tree task plus children when available, into session todos with `tsqId` metadata links.
-
-Link example:
-
-```json
-{ "action": "link", "todoId": 3, "tsqId": "tsq-349aqgsj.12" }
-```
-
-Promote example:
-
-```json
-{
-  "action": "promote_todo",
-  "todoId": 4,
+  "action": "create",
+  "task": "Add cwd guard tests",
   "kind": "task",
   "priority": 2,
-  "assignee": "developer",
-  "parent": "tsq-349aqgsj"
+  "under": "task-parent",
+  "planned": true
 }
 ```
 
-Import example:
-
 ```json
-{ "action": "import_tsq", "tsqId": "tsq-349aqgsj.12", "owner": "developer" }
+{ "action": "block", "task": "task-child", "by": "task-blocker" }
 ```
 
-List links example:
-
 ```json
-{ "action": "list_links" }
+{ "action": "order", "task": "task-later", "after": "task-earlier" }
 ```
 
-### Tasque status footer
+```json
+{ "action": "link", "todo": 3, "task": "task-123" }
+```
 
-The status footer shows cached Tasque status in interactive UI:
+```json
+{
+  "action": "promote",
+  "todo": 4,
+  "kind": "task",
+  "priority": 2,
+  "under": "task-parent",
+  "for": "developer"
+}
+```
+
+```json
+{
+  "action": "import",
+  "task": "task-123",
+  "to": "todo",
+  "for": "developer"
+}
+```
+
+### Task status footer
+
+The status footer shows cached durable-task status in interactive UI:
 
 - ready coding count
 - ready planning count
-- `mine` count for tasks assigned to `pi`
+- `mine` count for in-progress tasks assigned to `pi`
 - loading, stale, and error states
 
-It refreshes on session start, periodically, and after successful durable mutations from `tsq_change`, `tsq_claim`, or `task_bridge`.
+It refreshes on session start, periodically, and after successful durable mutations from `task`.
 
-The footer is display-only. Refreshed status is not injected into the model context; agents should use `tsq_query` for fresh durable task data. If agents claim with a non-`pi` assignee, those tasks may not appear in the footer's `mine` count.
+The footer is display-only. Refreshed status is not injected into the model context; agents should use `task` for fresh durable task data. If agents claim with a non-`pi` assignee, those tasks may not appear in the footer's `mine` count.
 
 ## Verification
 

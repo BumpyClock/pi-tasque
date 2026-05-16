@@ -5,6 +5,10 @@ import type {
 	ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { type Static, Type } from "typebox";
+import {
+	READ_TASKS_PROMPT_GUIDELINES,
+	READ_TASKS_PROMPT_SNIPPET,
+} from "../guidelines/internal-tools.js";
 import { truncatedTextToolResult } from "../shared/tool-result.js";
 import type { TruncatedText } from "../shared/truncation.js";
 import { runTsqJson } from "./runner.js";
@@ -40,12 +44,12 @@ export type TsqQueryAction = (typeof TSQ_QUERY_ACTIONS)[number];
 export const TsqQueryParamsSchema = Type.Object(
 	{
 		action: StringEnum(TSQ_QUERY_ACTIONS, {
-			description: "Read-only Tasque query to run.",
+			description: "Read-only durable task query to run.",
 		}),
 		id: Type.Optional(
 			Type.String({
 				description:
-					"Tasque task id. Required for show, show_with_spec, deps, and notes.",
+					"Durable task id. Required for show, spec details, deps, and notes.",
 			}),
 		),
 		lane: Type.Optional(
@@ -98,15 +102,10 @@ const DEFAULT_QUERY_TIMEOUT_MS = 10_000;
 export function registerTsqQueryTool(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: TSQ_QUERY_TOOL_NAME,
-		label: "Tasque Query",
-		description:
-			"Run read-only Tasque durable-task queries through tsq --format json. Does not mutate Tasque state.",
-		promptSnippet:
-			"Use tsq_query for fresh read-only Tasque task state such as doctor, ready/open lists, show, deps, notes, tree, and similar lookups.",
-		promptGuidelines: [
-			"tsq_query is read-only; use mutation tools for lifecycle or notes.",
-			"Use show_with_spec only when spec content is needed; regular show is more concise.",
-		],
+		label: "Task Query",
+		description: "Read durable task state. Does not mutate tasks.",
+		promptSnippet: READ_TASKS_PROMPT_SNIPPET,
+		promptGuidelines: READ_TASKS_PROMPT_GUIDELINES,
 		parameters: TsqQueryParamsSchema,
 		executionMode: "parallel",
 		async execute(
@@ -132,10 +131,11 @@ export async function executeTsqQuery(
 	AgentToolResult<TsqQueryDetails & { readonly truncation: TruncatedText }>
 > {
 	const argv = buildTsqQueryArgv(params);
-	const data = await runTsqJson<TsqQueryData>(pi, { cwd: ctx.cwd }, argv, {
+	const rawData = await runTsqJson<TsqQueryData>(pi, { cwd: ctx.cwd }, argv, {
 		timeout: DEFAULT_QUERY_TIMEOUT_MS,
 		...(signal === undefined ? {} : { signal }),
 	});
+	const data = normalizeQueryData(params, rawData);
 	const text = formatTsqQueryResult(params, data);
 
 	const details: TsqQueryDetails = {
@@ -197,6 +197,24 @@ export function buildTsqQueryArgv(params: TsqQueryParams): string[] {
 	}
 }
 
+function normalizeQueryData(
+	params: TsqQueryParams,
+	data: TsqQueryData,
+): TsqQueryData {
+	if (params.action !== "find_tree") {
+		return data;
+	}
+
+	const id = params.id?.trim();
+	if (id === undefined || id.length === 0) {
+		return data;
+	}
+
+	const found = findTaskTreeNode(getTreeRoots(data), id);
+	const filtered = found === undefined ? [] : [found];
+	return Array.isArray(data) ? filtered : { tree: filtered };
+}
+
 function formatTsqQueryResult(
 	params: TsqQueryParams,
 	data: TsqQueryData,
@@ -229,7 +247,7 @@ function formatDoctor(data: TsqQueryData): string {
 		? doctor.issues.length
 		: undefined;
 	const parts = [
-		"Tasque doctor",
+		"Task doctor",
 		formatMetric(doctor.tasks, "tasks"),
 		formatMetric(doctor.events, "events"),
 		issueCount === undefined ? undefined : `${issueCount} issues`,
@@ -242,7 +260,7 @@ function formatTaskList(
 	tasks: readonly TsqTask[],
 ): string {
 	const lines = [
-		`Tasque ${action}: ${formatCount(tasks.length, "task")}${formatLimitNotice(tasks.length)}`,
+		`Task ${action}: ${formatCount(tasks.length, "task")}${formatLimitNotice(tasks.length)}`,
 		...tasks.slice(0, MAX_RENDERED_ITEMS).map(formatTaskLine),
 	];
 	return lines.join("\n");
@@ -268,21 +286,19 @@ function formatShow(data: TsqQueryData): string {
 		]
 			.filter((part): part is string => part !== undefined)
 			.join(" · ");
-		return [`Tasque task: ${parts}: ${task.title}`, extra]
-			.filter(Boolean)
-			.join("\n");
+		return [`Task: ${parts}: ${task.title}`, extra].filter(Boolean).join("\n");
 	}
-	return "Tasque task: no task data returned";
+	return "Task: no task data returned";
 }
 
 function formatDeps(data: TsqQueryData): string {
 	const root = (data as Partial<{ root: TsqDepTreeNode }>).root;
 	if (root === undefined) {
-		return "Tasque deps: no dependency data returned";
+		return "Task deps: no dependency data returned";
 	}
 	const lines = flattenDepTree(root).slice(0, MAX_RENDERED_ITEMS);
 	return [
-		`Tasque deps: ${root.id}${formatLimitNotice(countDepTree(root))}`,
+		`Task deps: ${root.id}${formatLimitNotice(countDepTree(root))}`,
 		...lines.map(
 			({ node, indent }) =>
 				`${"  ".repeat(indent)}${formatTaskLine(node.task)}`,
@@ -295,7 +311,7 @@ function formatNotes(data: TsqQueryData): string {
 	const notes = notesData.notes ?? [];
 	const taskId = notesData.task_id ?? "task";
 	return [
-		`Tasque notes for ${taskId}: ${formatCount(notes.length, "note")}${formatLimitNotice(notes.length)}`,
+		`Task notes for ${taskId}: ${formatCount(notes.length, "note")}${formatLimitNotice(notes.length)}`,
 		...notes.slice(0, MAX_RENDERED_ITEMS).map((note) => {
 			const firstLine = note.text.split(/\r?\n/u)[0] ?? "";
 			return `${note.ts} ${note.actor}: ${truncateInline(firstLine, 120)}`;
@@ -307,7 +323,7 @@ function formatTree(data: TsqQueryData, label = "tree"): string {
 	const roots = getTreeRoots(data);
 	const flattened = roots.flatMap((root) => flattenTaskTree(root));
 	return [
-		`Tasque ${label}: ${formatCount(flattened.length, "task")}${formatLimitNotice(flattened.length)}`,
+		`Task ${label}: ${formatCount(flattened.length, "task")}${formatLimitNotice(flattened.length)}`,
 		...flattened
 			.slice(0, MAX_RENDERED_ITEMS)
 			.map(
@@ -321,7 +337,7 @@ function formatSimilar(data: TsqQueryData): string {
 	const similar = data as Partial<TsqSimilarData>;
 	const candidates = similar.candidates ?? [];
 	return [
-		`Tasque similar: ${formatCount(candidates.length, "candidate")}${formatLimitNotice(candidates.length)}`,
+		`Task similar: ${formatCount(candidates.length, "candidate")}${formatLimitNotice(candidates.length)}`,
 		...candidates.slice(0, MAX_RENDERED_ITEMS).map(formatCandidateLine),
 	].join("\n");
 }
@@ -340,6 +356,22 @@ function getTreeRoots(data: TsqQueryData): readonly TsqTaskTreeNode[] {
 	}
 	const tree = (data as Partial<TsqTreeResult>).tree;
 	return Array.isArray(tree) ? tree.filter(isTaskTreeNode) : [];
+}
+
+function findTaskTreeNode(
+	roots: readonly TsqTaskTreeNode[],
+	id: string,
+): TsqTaskTreeNode | undefined {
+	for (const root of roots) {
+		if (root.task.id === id) {
+			return root;
+		}
+		const child = findTaskTreeNode(root.children, id);
+		if (child !== undefined) {
+			return child;
+		}
+	}
+	return undefined;
 }
 
 function hasTreeData(data: TsqQueryData): boolean {
@@ -423,7 +455,7 @@ function validateDepth(depth: unknown): number | undefined {
 		return undefined;
 	}
 	if (typeof depth !== "number" || !Number.isInteger(depth) || depth < 1) {
-		throw new Error("tsq_query depth must be an integer >= 1");
+		throw new Error("task dependency depth must be an integer >= 1");
 	}
 	return depth;
 }
@@ -435,7 +467,7 @@ function requireString(
 ): string {
 	const trimmed = value?.trim();
 	if (trimmed === undefined || trimmed.length === 0) {
-		throw new Error(`tsq_query action ${action} requires ${field}`);
+		throw new Error(`task action ${action} requires ${field}`);
 	}
 	return trimmed;
 }

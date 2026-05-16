@@ -26,13 +26,7 @@ describe("pi-tasque extension registration", () => {
 
 		const toolNames = Array.from(captured.tools.keys()).sort();
 		expect(new Set(toolNames).size).toBe(toolNames.length);
-		expect(toolNames).toEqual([
-			"task_bridge",
-			"todo",
-			"tsq_change",
-			"tsq_claim",
-			"tsq_query",
-		]);
+		expect(toolNames).toEqual(["task", "todo"]);
 		const commandNames = Array.from(captured.commands.keys());
 		expect(new Set(commandNames).size).toBe(commandNames.length);
 		expect(commandNames).toEqual(["todos"]);
@@ -50,24 +44,24 @@ describe("pi-tasque extension registration", () => {
 		).toBeGreaterThanOrEqual(1);
 	});
 
-	it("wires task_bridge promote/import handlers in the installed extension", async () => {
+	it("wires task promote/import handlers in the installed extension", async () => {
 		const { pi, captured } = createMockPi();
 
 		piTasqueExtension(pi);
 
-		const tool = captured.tools.get("task_bridge");
-		if (tool === undefined) throw new Error("task_bridge was not registered");
+		const tool = captured.tools.get("task");
+		if (tool === undefined) throw new Error("task was not registered");
 
 		const promoteResult = await tool.execute(
 			"call-1",
-			{ action: "promote_todo" },
+			{ action: "promote" },
 			undefined,
 			undefined,
 			ctx,
 		);
 		expect(promoteResult.details).toMatchObject({
 			ok: false,
-			error: { code: "validation_error", message: "todoId is required" },
+			error: { code: "validation_error", message: "todo is required" },
 		});
 		expect(promoteResult.details).not.toMatchObject({
 			error: { code: "not_implemented" },
@@ -75,14 +69,14 @@ describe("pi-tasque extension registration", () => {
 
 		const importResult = await tool.execute(
 			"call-2",
-			{ action: "import_tsq" },
+			{ action: "import" },
 			undefined,
 			undefined,
 			ctx,
 		);
 		expect(importResult.details).toMatchObject({
 			ok: false,
-			error: { code: "validation_error", message: "tsqId is required" },
+			error: { code: "validation_error", message: "task is required" },
 		});
 		expect(importResult.details).not.toMatchObject({
 			error: { code: "not_implemented" },

@@ -191,13 +191,13 @@ describe("registerTaskBridgeTool", () => {
 		);
 
 		expect(firstText(result)).toBe(
-			`Error: task_bridge action ${action} handler is not configured`,
+			`Error: task/todo bridge action ${action} handler is not configured`,
 		);
 		expect(result.details).toMatchObject({
 			ok: false,
 			error: {
 				code: "not_implemented",
-				message: `task_bridge action ${action} handler is not configured`,
+				message: `task/todo bridge action ${action} handler is not configured`,
 			},
 		});
 	});

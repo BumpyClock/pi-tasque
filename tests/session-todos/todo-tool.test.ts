@@ -50,14 +50,16 @@ afterEach(() => {
 });
 
 describe("registerTodoTool", () => {
-	it("registers the compatible todo tool shape and tactical guidance", () => {
+	it("registers the compatible todo tool shape", () => {
 		const { tool } = setup();
 
 		expect(tool.name).toBe("todo");
 		expect(tool.label).toBe("Todo");
 		expect(tool.description).toContain("current-session");
-		expect(tool.promptSnippet).toContain("current-session tactical");
-		expect(tool.promptGuidelines?.join("\n")).toContain("not durable backlog");
+		expect(tool.promptSnippet).toContain("Current-session checklist");
+		expect(tool.promptGuidelines).toEqual([
+			"Use `todo` for current-session checklist steps; use `task` for durable project work.",
+		]);
 
 		const schemaText = JSON.stringify(tool.parameters);
 		for (const action of [

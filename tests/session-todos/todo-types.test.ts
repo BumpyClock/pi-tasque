@@ -13,13 +13,13 @@ import {
 } from "../../src/session-todos/tool/types.js";
 
 describe("session todo tool types", () => {
-	it("keeps rpiv-todo tool identity strings stable", () => {
+	it("keeps pi-tasque todo identity strings stable", () => {
 		expect(TOOL_NAME).toBe("todo");
 		expect(TOOL_LABEL).toBe("Todo");
 		expect(COMMAND_NAME).toBe("todos");
 	});
 
-	it("keeps the replay snapshot compatible with rpiv-todo", () => {
+	it("keeps the replay snapshot stable", () => {
 		const task: Task = {
 			id: 1,
 			subject: "Port todo types",

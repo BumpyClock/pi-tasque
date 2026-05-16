@@ -14,7 +14,7 @@ import { TodoOverlay } from "../../src/session-todos/todo-overlay.js";
 import type { Task } from "../../src/session-todos/tool/types.js";
 import { makeTheme } from "../support/theme.js";
 
-const WIDGET_KEY = "rpiv-todos";
+const WIDGET_KEY = "pi-tasque-todos";
 
 type MockUI = ExtensionUIContext & {
 	setWidget: ReturnType<typeof vi.fn>;

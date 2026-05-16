@@ -79,7 +79,7 @@ export interface TaskMutationParams {
 
 // ---------------------------------------------------------------------------
 // TypeBox parameter schema — every `description` doubles as LLM-facing prompt
-// copy. Field order and wording stay compatible with rpiv-todo v1.
+// copy. Keep field order and wording stable for replay and agent ergonomics.
 // ---------------------------------------------------------------------------
 
 export const TodoParamsSchema = Type.Object({
@@ -92,10 +92,10 @@ export const TodoParamsSchema = Type.Object({
 		"clear",
 	] as const),
 	subject: Type.Optional(
-		Type.String({ description: "Task subject line (required for create)" }),
+		Type.String({ description: "Todo subject line (required for create)" }),
 	),
 	description: Type.Optional(
-		Type.String({ description: "Long-form task description" }),
+		Type.String({ description: "Long-form todo description" }),
 	),
 	activeForm: Type.Optional(
 		Type.String({
@@ -115,17 +115,17 @@ export const TodoParamsSchema = Type.Object({
 	),
 	addBlockedBy: Type.Optional(
 		Type.Array(Type.Number(), {
-			description: "Task ids to add to blockedBy (update only, additive merge)",
+			description: "Todo ids to add to blockedBy (update only, additive merge)",
 		}),
 	),
 	removeBlockedBy: Type.Optional(
 		Type.Array(Type.Number(), {
 			description:
-				"Task ids to remove from blockedBy (update only, additive merge)",
+				"Todo ids to remove from blockedBy (update only, additive merge)",
 		}),
 	),
 	owner: Type.Optional(
-		Type.String({ description: "Agent/owner assigned to this task" }),
+		Type.String({ description: "Agent/owner assigned to this todo" }),
 	),
 	metadata: Type.Optional(
 		Type.Record(Type.String(), Type.Unknown(), {
@@ -135,7 +135,7 @@ export const TodoParamsSchema = Type.Object({
 	),
 	id: Type.Optional(
 		Type.Number({
-			description: "Task id (required for update, get, delete)",
+			description: "Todo id (required for update, get, delete)",
 		}),
 	),
 	includeDeleted: Type.Optional(

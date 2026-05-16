@@ -12,18 +12,31 @@
     "url": "https://github.com/BumpyClock/pi-tasque/issues"
   },
   "homepage": "https://github.com/BumpyClock/pi-tasque#readme",
-  "keywords": ["pi-package", "pi-extension", "tasque", "tsq", "todo"],
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "tasque",
+    "tsq",
+    "todo"
+  ],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
-  "files": ["src/", "README.md", "LICENSE", "NOTICE.md"],
+  "files": [
+    "src/",
+    "README.md",
+    "LICENSE",
+    "NOTICE.md"
+  ],
   "publishConfig": {
     "access": "public",
     "provenance": true
   },
   "pi": {
-    "extensions": ["./src/index.ts"]
+    "extensions": [
+      "./src/index.ts"
+    ]
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
@@ -35,5 +48,6 @@
     "@types/node": "latest",
     "typescript": "latest",
     "vitest": "latest"
-  }
+  },
+  "packageManager": "pnpm@11.1.2+sha512.415a1cc25974731e75455c1468371be74c5aa5fb7621b50d4056d222451609f11412f23fd602e6169f1e060466641f798597e1be961a10688836a67b16569499"
 }

@@ -36,6 +36,10 @@ function errorEnvelope(message: string) {
 	};
 }
 
+function gitRootResult() {
+	return { stdout: "/repo\n", stderr: "", code: 0, killed: false };
+}
+
 function task(id: string) {
 	return {
 		id,
@@ -59,11 +63,16 @@ function deferred<T>() {
 	return { promise, resolve };
 }
 
+const PROJECT_ROOT_CALL_ARGS = [["rev-parse", "--show-toplevel"]] as const;
 const TASQUE_REFRESH_CALL_ARGS = [
 	["doctor", "--format", "json"],
 	["find", "ready", "--lane", "coding", "--format", "json"],
 	["find", "ready", "--lane", "planning", "--format", "json"],
 	["find", "in-progress", "--assignee", "pi", "--format", "json"],
+] as const;
+const STATUS_REFRESH_CALL_ARGS = [
+	...PROJECT_ROOT_CALL_ARGS,
+	...TASQUE_REFRESH_CALL_ARGS,
 ] as const;
 
 function uiContext(overrides: Partial<ExtensionContext> = {}) {
@@ -173,7 +182,8 @@ describe("Tasque status cache", () => {
 describe("registerTasqueStatusLifecycle", () => {
 	it("sets footer status on session_start when UI is available", async () => {
 		const { pi, captured } = createMockPi();
-		captured.execHandler = (_command, args) => {
+		captured.execHandler = (toolCommand, args) => {
+			if (toolCommand === "git") return gitRootResult();
 			const command = args.slice(0, -2).join(" ");
 			if (command === "find ready --lane coding") {
 				return okEnvelope({ tasks: [task("tsq-code-1")] });
@@ -205,13 +215,10 @@ describe("registerTasqueStatusLifecycle", () => {
 		);
 	});
 
-	it.each([
-		"tsq_change",
-		"tsq_claim",
-		"task_bridge",
-	] as const)("refreshes after successful %s execution", async (toolName) => {
+	it("refreshes after successful task execution", async () => {
 		const { pi, captured } = createMockPi();
-		captured.execHandler = () => okEnvelope({ tasks: [] });
+		captured.execHandler = (toolCommand) =>
+			toolCommand === "git" ? gitRootResult() : okEnvelope({ tasks: [] });
 		registerTasqueStatusLifecycle(pi, { now: () => 1_000 });
 		const ctx = uiContext();
 
@@ -221,14 +228,16 @@ describe("registerTasqueStatusLifecycle", () => {
 			{
 				type: "tool_execution_end",
 				toolCallId: "call-1",
-				toolName,
+				toolName: "task",
 				result: { details: { ok: true } },
 				isError: false,
 			},
 			ctx,
 		);
 
-		expect(captured.execCalls).toHaveLength(4);
+		expect(captured.execCalls.map((call) => call.args)).toEqual(
+			STATUS_REFRESH_CALL_ARGS,
+		);
 		expect(ctx.ui.setStatus).toHaveBeenCalledWith(
 			"pi-tasque",
 			"tsq: coding 0 · planning 0 · mine 0 · 0s",
@@ -247,7 +256,7 @@ describe("registerTasqueStatusLifecycle", () => {
 			{
 				type: "tool_execution_end",
 				toolCallId: "call-1",
-				toolName: "tsq_change",
+				toolName: "task",
 				result: { details: { ok: false } },
 				isError: false,
 			},
@@ -288,7 +297,7 @@ describe("registerTasqueStatusLifecycle", () => {
 			{
 				type: "tool_execution_end",
 				toolCallId: "call-1",
-				toolName: "tsq_change",
+				toolName: "task",
 				result: { details: { ok: true } },
 				isError: false,
 			},
@@ -298,12 +307,13 @@ describe("registerTasqueStatusLifecycle", () => {
 		expect(captured.execCalls).toEqual([]);
 	});
 
-	it("queues one post-mutation refresh when a tool update lands during interval refresh", async () => {
+	it("queues one post-mutation refresh when a task update lands during interval refresh", async () => {
 		vi.useFakeTimers();
 		let refreshRun = 0;
 		const intervalDoctor = deferred<ReturnType<typeof okEnvelope>>();
 		const { pi, captured } = createMockPi();
-		captured.execHandler = (_command, args) => {
+		captured.execHandler = (toolCommand, args) => {
+			if (toolCommand === "git") return gitRootResult();
 			const command = args.slice(0, -2).join(" ");
 			if (command === "doctor") {
 				refreshRun += 1;
@@ -350,7 +360,9 @@ describe("registerTasqueStatusLifecycle", () => {
 		ctx.ui.setStatus.mockClear();
 
 		await vi.advanceTimersByTimeAsync(1_000);
+		await Promise.resolve();
 		expect(captured.execCalls.map((call) => call.args)).toEqual([
+			...PROJECT_ROOT_CALL_ARGS,
 			["doctor", "--format", "json"],
 		]);
 
@@ -360,20 +372,20 @@ describe("registerTasqueStatusLifecycle", () => {
 			{
 				type: "tool_execution_end",
 				toolCallId: "call-1",
-				toolName: "tsq_change",
+				toolName: "task",
 				result: { details: { ok: true } },
 				isError: false,
 			},
 			ctx,
 		);
-		expect(captured.execCalls).toHaveLength(1);
+		expect(captured.execCalls).toHaveLength(2);
 
 		intervalDoctor.resolve(okEnvelope({ tasks: [] }));
 		await toolPromise;
 
 		expect(captured.execCalls.map((call) => call.args)).toEqual([
-			...TASQUE_REFRESH_CALL_ARGS,
-			...TASQUE_REFRESH_CALL_ARGS,
+			...STATUS_REFRESH_CALL_ARGS,
+			...STATUS_REFRESH_CALL_ARGS,
 		]);
 		expect(ctx.ui.setStatus).toHaveBeenLastCalledWith(
 			"pi-tasque",
@@ -386,7 +398,8 @@ describe("registerTasqueStatusLifecycle", () => {
 		let refreshRun = 0;
 		const intervalDoctor = deferred<ReturnType<typeof okEnvelope>>();
 		const { pi, captured } = createMockPi();
-		captured.execHandler = (_command, args) => {
+		captured.execHandler = (toolCommand, args) => {
+			if (toolCommand === "git") return gitRootResult();
 			const command = args.slice(0, -2).join(" ");
 			if (command === "doctor") {
 				refreshRun += 1;
@@ -418,7 +431,7 @@ describe("registerTasqueStatusLifecycle", () => {
 			{
 				type: "tool_execution_end",
 				toolCallId: "call-1",
-				toolName: "tsq_change",
+				toolName: "task",
 				result: { details: { ok: true } },
 				isError: false,
 			},
@@ -435,7 +448,7 @@ describe("registerTasqueStatusLifecycle", () => {
 		await toolPromise;
 
 		expect(captured.execCalls.map((call) => call.args)).toEqual(
-			TASQUE_REFRESH_CALL_ARGS,
+			STATUS_REFRESH_CALL_ARGS,
 		);
 		expect(ctx.ui.setStatus).toHaveBeenCalledTimes(1);
 		expect(ctx.ui.setStatus).toHaveBeenLastCalledWith("pi-tasque", undefined);
@@ -444,7 +457,8 @@ describe("registerTasqueStatusLifecycle", () => {
 	it("clears interval and footer status on session_shutdown", async () => {
 		vi.useFakeTimers();
 		const { pi, captured } = createMockPi();
-		captured.execHandler = () => okEnvelope({ tasks: [] });
+		captured.execHandler = (toolCommand) =>
+			toolCommand === "git" ? gitRootResult() : okEnvelope({ tasks: [] });
 		registerTasqueStatusLifecycle(pi, {
 			intervalMs: 1_000,
 			now: () => 1_000,
@@ -459,7 +473,9 @@ describe("registerTasqueStatusLifecycle", () => {
 		);
 		captured.execCalls.length = 0;
 		await vi.advanceTimersByTimeAsync(1_000);
-		expect(captured.execCalls).toHaveLength(4);
+		expect(captured.execCalls.map((call) => call.args)).toEqual(
+			STATUS_REFRESH_CALL_ARGS,
+		);
 		captured.execCalls.length = 0;
 
 		await emitPiEvent(

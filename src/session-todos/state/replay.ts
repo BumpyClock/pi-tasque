@@ -33,8 +33,7 @@ const VALID_STATUSES = new Set<TaskStatus>([
 	"deleted",
 ]);
 
-const TASK_BRIDGE_REPLAY_TOOL_NAME = "task_bridge";
-const TSQ_CLAIM_REPLAY_TOOL_NAME = "tsq_claim";
+const DURABLE_TASK_REPLAY_TOOL_NAME = "task";
 const TASK_BRIDGE_MUTATION_ACTIONS = new Set(["promote_todo", "import_tsq"]);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -226,11 +225,10 @@ function applyReplayableClaimTodo(state: TaskState, todo: Task): TaskState {
 
 /**
  * Rebuild todo state from the current session branch. The latest compatible
- * `todo` tool result wins; malformed snapshots are skipped. Successful
- * state-mutating `task_bridge` results replay their todo snapshot, while
- * successful `task_bridge link` results and successful `tsq_claim` createTodo
- * results are replayed onto the current todo snapshot so bridge metadata,
- * imports/promotions, and claim-created todos survive reload/branch replay.
+ * `todo` tool result wins; malformed snapshots are skipped. Successful durable
+ * `task` results replay todo snapshots, links, and claim-created todos so
+ * bridge metadata, imports/promotions, and claim-created todos survive
+ * reload/branch replay.
  */
 export function replayFromBranch(ctx: BranchContext): TaskState {
 	let result = emptyState();
@@ -248,7 +246,7 @@ export function replayFromBranch(ctx: BranchContext): TaskState {
 			continue;
 		}
 
-		if (message.toolName === TASK_BRIDGE_REPLAY_TOOL_NAME) {
+		if (message.toolName === DURABLE_TASK_REPLAY_TOOL_NAME) {
 			const snapshot = getReplayableBridgeTodoSnapshot(message.details);
 			if (snapshot !== undefined) {
 				result = snapshot;
@@ -256,12 +254,11 @@ export function replayFromBranch(ctx: BranchContext): TaskState {
 			}
 
 			const link = getReplayableBridgeLink(message.details);
-			if (link === undefined) continue;
-			result = applyReplayableBridgeLink(result, link);
-			continue;
-		}
+			if (link !== undefined) {
+				result = applyReplayableBridgeLink(result, link);
+				continue;
+			}
 
-		if (message.toolName === TSQ_CLAIM_REPLAY_TOOL_NAME) {
 			const todo = getReplayableClaimTodo(message.details);
 			if (todo === undefined) continue;
 			result = applyReplayableClaimTodo(result, todo);

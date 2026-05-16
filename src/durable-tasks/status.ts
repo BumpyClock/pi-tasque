@@ -8,10 +8,11 @@ import {
 	refreshTasqueStatusCache,
 	type TasqueStatusCache,
 } from "./cache.js";
+import { resolveProjectRoot } from "./project.js";
 
 export const TASQUE_STATUS_KEY = "pi-tasque";
 
-const MUTATING_TOOL_NAMES = new Set(["tsq_change", "tsq_claim", "task_bridge"]);
+const MUTATING_TOOL_NAMES = new Set(["task"]);
 const DEFAULT_INTERVAL_MS = 60_000;
 
 export interface TasqueStatusLifecycleOptions {
@@ -56,12 +57,25 @@ export function registerTasqueStatusLifecycle(
 		}
 
 		let refreshPromise: Promise<void>;
-		refreshPromise = refreshTasqueStatusCache(pi, { cwd: ctx.cwd }, cache, {
-			...(options.now === undefined ? {} : { now: options.now }),
+		refreshPromise = resolveProjectRoot(pi, ctx.cwd, {
 			...(options.refreshTimeoutMs === undefined
 				? {}
 				: { timeout: options.refreshTimeoutMs }),
 		})
+			.then((projectRoot) =>
+				refreshTasqueStatusCache(pi, { cwd: projectRoot }, cache, {
+					...(options.now === undefined ? {} : { now: options.now }),
+					...(options.refreshTimeoutMs === undefined
+						? {}
+						: { timeout: options.refreshTimeoutMs }),
+				}),
+			)
+			.catch((error) =>
+				createTasqueStatusCache({
+					...cache.state,
+					error: getErrorMessage(error),
+				}),
+			)
 			.then((nextCache) => {
 				if (!statusActive || generation !== lifecycleGeneration) {
 					return;
@@ -177,6 +191,10 @@ function hasStatusUi(ctx: ExtensionContext): boolean {
 		isRecord(ctx.ui) &&
 		typeof ctx.ui.setStatus === "function"
 	);
+}
+
+function getErrorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

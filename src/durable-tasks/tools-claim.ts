@@ -6,6 +6,10 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { type Static, Type } from "typebox";
 import {
+	CLAIM_TASK_PROMPT_GUIDELINES,
+	CLAIM_TASK_PROMPT_SNIPPET,
+} from "../guidelines/internal-tools.js";
+import {
 	applyTaskMutation,
 	type Op,
 } from "../session-todos/state/state-reducer.js";
@@ -24,7 +28,7 @@ export const TSQ_CLAIM_TOOL_NAME = "tsq_claim";
 
 export const TsqClaimParamsSchema = Type.Object(
 	{
-		id: Type.String({ description: "Named Tasque task id to claim." }),
+		id: Type.String({ description: "Named durable task id to claim." }),
 		assignee: Type.Optional(
 			Type.String({
 				description: "Agent or role claiming the task. Defaults to pi.",
@@ -38,8 +42,7 @@ export const TsqClaimParamsSchema = Type.Object(
 		),
 		requireSpec: Type.Optional(
 			Type.Boolean({
-				description:
-					"Require an attached Tasque spec before the claim succeeds.",
+				description: "Require an attached task spec before the claim succeeds.",
 			}),
 		),
 		createTodo: Type.Optional(
@@ -95,16 +98,10 @@ export function registerTsqClaimTool(pi: ExtensionAPI): void {
 	pi.registerTool(
 		defineTool({
 			name: TSQ_CLAIM_TOOL_NAME,
-			label: "Tasque Claim",
-			description:
-				"Claim a named durable Tasque task. Requires an explicit id; does not auto-select next ready work.",
-			promptSnippet:
-				"Use tsq_claim for named durable Tasque ownership. Provide id; assignee defaults to pi; start defaults to true.",
-			promptGuidelines: [
-				"Pass your own role/name as assignee when available, e.g. developer, worker, oracle.",
-				"Use createTodo only when you want one session todo linked to the claimed durable task.",
-				"Completing a linked session todo does not mark the Tasque task done; durable completion must be explicit.",
-			],
+			label: "Task Claim",
+			description: "Claim named durable task ownership.",
+			promptSnippet: CLAIM_TASK_PROMPT_SNIPPET,
+			promptGuidelines: CLAIM_TASK_PROMPT_GUIDELINES,
 			parameters: TsqClaimParamsSchema,
 			executionMode: "sequential",
 

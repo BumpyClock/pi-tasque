@@ -23,7 +23,7 @@ function todoResult(details: unknown): unknown {
 }
 
 function bridgeLinkResult(todoId: number, tsqId: string): unknown {
-	return toolResult("task_bridge", {
+	return toolResult("task", {
 		ok: true,
 		data: {
 			action: "link",
@@ -41,7 +41,7 @@ function bridgeSnapshotResult(
 	action: "promote_todo" | "import_tsq",
 	snapshot: Pick<TaskDetails, "tasks" | "nextId">,
 ): unknown {
-	return toolResult("task_bridge", {
+	return toolResult("task", {
 		ok: true,
 		data: {
 			action,
@@ -51,7 +51,7 @@ function bridgeSnapshotResult(
 }
 
 function claimTodoResult(todo: Task, tsqId = "tsq-claim"): unknown {
-	return toolResult("tsq_claim", {
+	return toolResult("task", {
 		ok: true,
 		data: {
 			id: tsqId,
@@ -244,7 +244,7 @@ describe("replayFromBranch", () => {
 		expect(state).toEqual({ tasks: [task(1, "kept")], nextId: 2 });
 	});
 
-	it("replays successful task_bridge link results onto current todo state", () => {
+	it("replays successful task link results onto current todo state", () => {
 		const created: TaskDetails = {
 			action: "create",
 			params: {},
@@ -265,7 +265,7 @@ describe("replayFromBranch", () => {
 		]);
 	});
 
-	it("ignores malformed task_bridge link replay details", () => {
+	it("ignores malformed task link replay details", () => {
 		const created: TaskDetails = {
 			action: "create",
 			params: {},
@@ -275,12 +275,12 @@ describe("replayFromBranch", () => {
 
 		const state = replay([
 			todoResult(created),
-			toolResult("task_bridge", { ok: false, data: { action: "link" } }),
-			toolResult("task_bridge", {
+			toolResult("task", { ok: false, data: { action: "link" } }),
+			toolResult("task", {
 				ok: true,
 				data: { action: "link", link: { todoId: 1, tsqId: " " } },
 			}),
-			toolResult("task_bridge", {
+			toolResult("task", {
 				ok: true,
 				data: { action: "link", link: { todoId: 99, tsqId: "tsq-missing" } },
 			}),
@@ -290,7 +290,7 @@ describe("replayFromBranch", () => {
 		expect(deriveTaskLinks(state)).toEqual([]);
 	});
 
-	it("replays successful task_bridge promote_todo todo snapshots", () => {
+	it("replays successful task promote todo snapshots", () => {
 		const promotedAt = "2026-05-15T00:00:00.000Z";
 		const created: TaskDetails = {
 			action: "create",
@@ -329,7 +329,7 @@ describe("replayFromBranch", () => {
 		});
 	});
 
-	it("replays successful task_bridge import_tsq todo snapshots", () => {
+	it("replays successful task import todo snapshots", () => {
 		const imported = {
 			tasks: [
 				{
@@ -354,7 +354,7 @@ describe("replayFromBranch", () => {
 		});
 	});
 
-	it("ignores failed or malformed task_bridge mutation snapshots", () => {
+	it("ignores failed or malformed task mutation snapshots", () => {
 		const created: TaskDetails = {
 			action: "create",
 			params: {},
@@ -364,7 +364,7 @@ describe("replayFromBranch", () => {
 
 		const state = replay([
 			todoResult(created),
-			toolResult("task_bridge", {
+			toolResult("task", {
 				ok: false,
 				data: {
 					action: "promote_todo",
@@ -374,7 +374,7 @@ describe("replayFromBranch", () => {
 					},
 				},
 			}),
-			toolResult("task_bridge", {
+			toolResult("task", {
 				ok: true,
 				data: {
 					action: "import_tsq",
@@ -386,7 +386,7 @@ describe("replayFromBranch", () => {
 		expect(state).toEqual({ tasks: [task(1, "Kept")], nextId: 2 });
 	});
 
-	it("replays successful tsq_claim createTodo results onto current todo state", () => {
+	it("replays successful task claim-created todo results onto current todo state", () => {
 		const created: TaskDetails = {
 			action: "create",
 			params: {},
@@ -414,7 +414,7 @@ describe("replayFromBranch", () => {
 		});
 	});
 
-	it("ignores malformed tsq_claim createTodo replay details", () => {
+	it("ignores malformed task claim-created todo replay details", () => {
 		const created: TaskDetails = {
 			action: "create",
 			params: {},
@@ -424,13 +424,13 @@ describe("replayFromBranch", () => {
 
 		const state = replay([
 			todoResult(created),
-			toolResult("tsq_claim", { ok: false, data: { createTodo: true } }),
-			toolResult("tsq_claim", { ok: true, data: { createTodo: false } }),
-			toolResult("tsq_claim", {
+			toolResult("task", { ok: false, data: { createTodo: true } }),
+			toolResult("task", { ok: true, data: { createTodo: false } }),
+			toolResult("task", {
 				ok: true,
 				data: { id: "tsq-bad", createTodo: true, todo: task(1, "Duplicate") },
 			}),
-			toolResult("tsq_claim", {
+			toolResult("task", {
 				ok: true,
 				data: { id: " ", createTodo: true, todo: task(2, "No tsq id") },
 			}),

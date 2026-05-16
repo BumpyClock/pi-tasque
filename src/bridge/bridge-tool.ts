@@ -5,6 +5,10 @@ import {
 	type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import {
+	TASK_TODO_BRIDGE_PROMPT_GUIDELINES,
+	TASK_TODO_BRIDGE_PROMPT_SNIPPET,
+} from "../guidelines/internal-tools.js";
+import {
 	errorToolDetails,
 	okToolDetails,
 	textToolResult,
@@ -32,18 +36,11 @@ export function registerTaskBridgeTool(
 	pi.registerTool(
 		defineTool({
 			name: TASK_BRIDGE_TOOL_NAME,
-			label: "Task Bridge",
+			label: "Task Todo Bridge",
 			description:
-				"Explicitly link, list, promote, or import between session todos and durable Tasque tasks. No automatic lifecycle sync.",
-			promptSnippet:
-				"task_bridge links, lists, promotes, and imports between session todos and durable Tasque tasks; it never auto-completes one layer from the other.",
-			promptGuidelines: [
-				"Use link to associate an existing todo with an existing Tasque task via todo metadata tsqId.",
-				"Use list_links to inspect current session todo ↔ Tasque associations.",
-				"Use promote_todo to create a Tasque task from a todo and link the promoted todo explicitly.",
-				"Use import_tsq to create or reuse session todos from Tasque task state and link them explicitly.",
-				"Todo completion does not mark Tasque done; durable completion stays explicit.",
-			],
+				"Link session todos and durable tasks. No automatic lifecycle sync.",
+			promptSnippet: TASK_TODO_BRIDGE_PROMPT_SNIPPET,
+			promptGuidelines: TASK_TODO_BRIDGE_PROMPT_GUIDELINES,
 			parameters: TaskBridgeParamsSchema,
 			executionMode: "sequential",
 
@@ -83,7 +80,7 @@ export async function executeTaskBridge(
 		default:
 			return errorResult(
 				"validation_error",
-				"action must be a supported task_bridge action",
+				"action must be a supported task/todo bridge action",
 			);
 	}
 }
@@ -160,7 +157,7 @@ function notImplementedResult(
 ): AgentToolResult<TaskBridgeDetails> {
 	return errorResult(
 		"not_implemented",
-		`task_bridge action ${action} handler is not configured`,
+		`task/todo bridge action ${action} handler is not configured`,
 	);
 }
 

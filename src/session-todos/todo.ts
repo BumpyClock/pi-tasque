@@ -3,6 +3,10 @@ import type {
 	ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import {
+	TODO_PROMPT_GUIDELINES,
+	TODO_PROMPT_SNIPPET,
+} from "../guidelines/todo.js";
+import {
 	selectTasksByStatus,
 	selectTodoCounts,
 	selectVisibleTasks,
@@ -32,17 +36,12 @@ import {
 const SECTION_PENDING = "── Pending ──";
 const SECTION_IN_PROGRESS = "── In Progress ──";
 const SECTION_COMPLETED = "── Completed ──";
-const TODO_AFFECTING_TOOLS = new Set(["todo", "task_bridge", "tsq_claim"]);
+const TODO_AFFECTING_TOOLS = new Set(["todo", "task"]);
 
-export const TODO_PROMPT_SNIPPET =
-	"Manage current-session tactical todos for multi-step execution.";
-
-export const TODO_PROMPT_GUIDELINES: string[] = [
-	"Use `todo` for current-session tactical work: inspect, edit, verify, and handoff steps for the task in front of you.",
-	"Use `todo` for session work, not durable backlog; use Tasque/tsq tools for durable ownership, specs, and cross-session work.",
-	"Mark one task in_progress before starting it, complete it when verified, and keep blocked or partial work out of completed.",
-	"Use blockedBy for session-local dependencies; list hides deleted tombstones unless includeDeleted is true.",
-];
+export {
+	TODO_PROMPT_GUIDELINES,
+	TODO_PROMPT_SNIPPET,
+} from "../guidelines/todo.js";
 
 export { isTransitionValid } from "./state/invariants.js";
 export { applyTaskMutation } from "./state/state-reducer.js";
@@ -75,7 +74,7 @@ export function registerTodoTool(pi: ExtensionAPI): void {
 		name: TOOL_NAME,
 		label: TOOL_LABEL,
 		description:
-			"Manage current-session todos for tactical execution. Actions: create, update, list, get, delete, clear. Use for this session's working checklist, not durable backlog.",
+			"Manage current-session todos for tactical execution. Actions: create, update, list, get, delete, clear. Use for this session's checklist; use task for durable project work.",
 		promptSnippet: TODO_PROMPT_SNIPPET,
 		promptGuidelines: TODO_PROMPT_GUIDELINES,
 		parameters: TodoParamsSchema,

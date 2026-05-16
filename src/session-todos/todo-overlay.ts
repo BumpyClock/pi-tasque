@@ -21,7 +21,7 @@ import type { TaskState } from "./state/state.js";
 import { getState } from "./state/store.js";
 import { formatOverlayTaskLine, formatStatusLabel } from "./view/format.js";
 
-const WIDGET_KEY = "rpiv-todos";
+const WIDGET_KEY = "pi-tasque-todos";
 const MAX_WIDGET_LINES = 12;
 const OVERLAY_HEADING = "Todos";
 const OVERLAY_MORE = "more";

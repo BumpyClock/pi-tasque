@@ -251,6 +251,34 @@ describe("registerTsqQueryTool", () => {
 		expect(text).not.toContain("0 tasks");
 	});
 
+	it("filters find_tree results by id when provided", async () => {
+		const { captured, tool } = registerQueryTool();
+		captured.execHandler = () => ({
+			stdout: okEnvelope(treeData()),
+			stderr: "",
+			code: 0,
+			killed: false,
+		});
+
+		const result = await tool.execute(
+			"call-1",
+			{ action: "find_tree", id: "tsq-child" },
+			undefined,
+			undefined,
+			ctx,
+		);
+
+		const text =
+			result.content[0]?.type === "text" ? result.content[0].text : "";
+		expect(text).toContain("tsq-child");
+		expect(text).not.toContain("tsq-parent");
+		expect(result.details).toMatchObject({
+			ok: true,
+			action: "find_tree",
+			data: { tree: [{ task: { id: "tsq-child" } }] },
+		});
+	});
+
 	it("returns concise content while preserving full structured data in details", async () => {
 		const { captured, tool } = registerQueryTool();
 		const data = {
