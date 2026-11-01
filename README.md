@@ -33,6 +33,16 @@ edit TypeScript files -> /reload -> test behavior
 
 Pi loads the extension entrypoint from the installed package path, so TypeScript source edits do not require reinstalling the local package. Use `/reload` in the Pi session after changing files under `src/`.
 
+## Contributor validation
+
+Use Node 26.12.1 from `.node-version`, prepared npm 11.12.0, then `npm ci`. Run `npm run typecheck` and `npm test`; TypeScript always uses the whole project and Vitest keeps default isolation. No formatter/linter policy is configured or implied.
+
+Opt in with `sh scripts/install-hooks.sh` (Git Bash on Windows). It refuses unrelated active hooks/config and is idempotent. The hook requires a clean checkout of the exact pushed commit and prepared local tools. All non-deletion updates run the full existing typecheck and test suite, including new/unknown refs and shared config/dependency changes. Deletion-only pushes skip checks; distinct pushed commits need separate validation. No installs, task mutations, package versioning or publishing run inside the hook.
+
+`python3 scripts/test-hooks.py` exercises real hook/installer outcomes in disposable Git fixtures, with stubbed project commands and nonzero propagation. Native shell acceptance remains separate.
+
+Compatible Linux CI/release-quality/metadata jobs select Boat. The npm publication job stays GitHub-hosted because npm OIDC trusted publishing does not support self-hosted runners. Existing permissions, release dependencies, namespace and publication gates remain intact; no workflow is activated by installing a local hook.
+
 ## Agent guidance
 
 Use `todo` for current-session checklists; use `task` for durable project work, ownership, notes, specs, dependencies, and explicit todo links.
